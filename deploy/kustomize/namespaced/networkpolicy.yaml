@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-to-semaphore-xds
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: semaphore-xds
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}
