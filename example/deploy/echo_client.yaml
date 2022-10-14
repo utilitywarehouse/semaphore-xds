@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xds-conf
+data:
+  xds_bootstrap.json: |
+    {
+      "xds_servers": [
+        {
+          "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+          "channel_creds": [
+            {
+              "type": "insecure"
+            }
+          ],
+          "server_features": ["xds_v3"]          
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-echo-client
+  labels:
+    app.kubernetes.io/name: grpc-echo-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grpc-echo-client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grpc-echo-client
+    spec:
+      containers:
+        - name: client
+          image: quay.io/utilitywarehouse/semaphore-xds:master
+          imagePullPolicy: Always
+          command: ["/semaphore-xds-echo-client"]
+          args:
+            - --grpc-server-address=grpc-echo-server.labs:50051
+          env:
+            - name: GRPC_XDS_BOOTSTRAP
+              value: /config/xds_bootstrap.json
+          volumeMounts:
+            - name: xds-vol
+              mountPath: /config
+      volumes:
+        - name: xds-vol
+          configMap:
+            name: xds-conf
+            items:
+              - key: xds_bootstrap.json
+                path: xds_bootstrap.json
