@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	endpointservice "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
@@ -15,7 +14,6 @@ import (
 	routeservice "github.com/envoyproxy/go-control-plane/envoy/service/route/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
-	elog "github.com/envoyproxy/go-control-plane/pkg/log"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"google.golang.org/grpc"
@@ -24,33 +22,7 @@ import (
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
-// EmptyNodeID satisfies cachev3.NodeHash but always return "global" as node
-type EmptyNodeID struct{}
-
-func (e EmptyNodeID) ID(node *corev3.Node) string {
-	return ""
-}
-
 const grpcMaxConcurrentStreams = 1000
-
-var Logger elog.Logger = &elog.LoggerFuncs{
-	DebugFunc: func(s string, i ...interface{}) {
-		msg := fmt.Sprintf(s, i...)
-		log.Logger.Debug("Snapshotter", "msg", msg)
-	},
-	InfoFunc: func(s string, i ...interface{}) {
-		msg := fmt.Sprintf(s, i...)
-		log.Logger.Info("Snapshotter", "msg", msg)
-	},
-	WarnFunc: func(s string, i ...interface{}) {
-		msg := fmt.Sprintf(s, i...)
-		log.Logger.Warn("Snapshotter", "msg", msg)
-	},
-	ErrorFunc: func(s string, i ...interface{}) {
-		msg := fmt.Sprintf(s, i...)
-		log.Logger.Error("Snapshotter", "msg", msg)
-	},
-}
 
 type Snapshotter struct {
 	version int32
@@ -63,7 +35,7 @@ type Snapshotter struct {
 func NewSnapshotter(port uint) *Snapshotter {
 	return &Snapshotter{
 		servePort: port,
-		Cache:     cache.NewSnapshotCache(false, cache.IDHash{}, Logger),
+		Cache:     cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger),
 	}
 }
 
@@ -162,36 +134,36 @@ func (s *Snapshotter) OnFetchResponse(req *discovery.DiscoveryRequest, resp *dis
 func (s *Snapshotter) ListenAndServe() {
 	ctx := context.Background()
 
-	srv := xds.NewServer(ctx, s.Cache, s)
-	runManagementServer(ctx, srv, s.servePort)
+	xdsServer := xds.NewServer(ctx, s.Cache, s)
+	grpcOptions := []grpc.ServerOption{grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams)}
+	grpcServer := grpc.NewServer(grpcOptions...)
+	registerServices(grpcServer, xdsServer)
+	runGrpcServer(ctx, grpcServer, s.servePort)
 }
 
-// runManagementServer starts an xDS server at the given port.
-func runManagementServer(ctx context.Context, server xds.Server, port uint) {
-	var grpcOptions []grpc.ServerOption
-	grpcOptions = append(grpcOptions, grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams))
-	grpcServer := grpc.NewServer(grpcOptions...)
+// registerServices registers xds services served by our grpc server
+func registerServices(grpcServer *grpc.Server, xdsServer xds.Server) {
+	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, xdsServer)
+	endpointservice.RegisterEndpointDiscoveryServiceServer(grpcServer, xdsServer)
+	clusterservice.RegisterClusterDiscoveryServiceServer(grpcServer, xdsServer)
+	routeservice.RegisterRouteDiscoveryServiceServer(grpcServer, xdsServer)
+	listenerservice.RegisterListenerDiscoveryServiceServer(grpcServer, xdsServer)
+}
 
+// runGrpcServer starts the passed grpc server at the given port.
+func runGrpcServer(ctx context.Context, grpcServer *grpc.Server, port uint) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Logger.Error("Failed to start grpc server", "port", port, "error", err)
 		return
 	}
-	// register services
-	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, server)
-	endpointservice.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
-	clusterservice.RegisterClusterDiscoveryServiceServer(grpcServer, server)
-	routeservice.RegisterRouteDiscoveryServiceServer(grpcServer, server)
-	listenerservice.RegisterListenerDiscoveryServiceServer(grpcServer, server)
-
-	log.Logger.Info("management server listening", "port", port)
+	log.Logger.Info("Management GRPC server listening", "port", port)
 	go func() {
 		if err = grpcServer.Serve(lis); err != nil {
 			log.Logger.Error("failed to serve")
 		}
 	}()
 	<-ctx.Done()
-
 	grpcServer.GracefulStop()
 }
 
