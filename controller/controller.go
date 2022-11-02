@@ -28,8 +28,8 @@ func NewController(client kubernetes.Interface, namespace, labelselector string,
 		snapshotter: s,
 	}
 
-	controller.serviceQueue = newQueue("service", controller.reconcile)
-	controller.endpointSliceQueue = newQueue("endpointSlice", controller.reconcile)
+	controller.serviceQueue = newQueue("service", controller.reconcileServices)
+	controller.endpointSliceQueue = newQueue("endpointSlice", controller.reconcileEndpointSlices)
 
 	controller.serviceWatcher = kube.NewServiceWatcher(client, resyncPeriod, controller.serviceEventHandler, labelselector, namespace)
 	controller.serviceWatcher.Init()
@@ -96,6 +96,10 @@ func (c *Controller) endpointSliceEventHandler(eventType watch.EventType, old *d
 	}
 }
 
-func (c *Controller) reconcile() error {
-	return c.snapshotter.Snap(c.serviceWatcher, c.endpointSliceWatcher)
+func (c *Controller) reconcileServices() error {
+	return c.snapshotter.SnapServices(c.serviceWatcher)
+}
+
+func (c *Controller) reconcileEndpointSlices() error {
+	return c.snapshotter.SnapEndpoints(c.endpointSliceWatcher)
 }

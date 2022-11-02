@@ -25,50 +25,90 @@ import (
 const grpcMaxConcurrentStreams = 1000
 
 type Snapshotter struct {
-	version int32
-
-	servePort uint
-	snapshot  *cache.Snapshot
-	Cache     cache.SnapshotCache // Maybe we could use a muxCache here and split services and endpoints to save some compute
+	servePort            uint
+	servicesCache        cache.SnapshotCache
+	serviceSnapVersion   int32
+	endpointsCache       cache.SnapshotCache
+	endpointsSnapVersion int32
+	muxCache             cache.MuxCache
 }
 
-func NewSnapshotter(port uint) *Snapshotter {
-	return &Snapshotter{
-		servePort: port,
-		Cache:     cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger),
+// Maps type urls to services and endpoints for muxCache
+func mapTypeURL(typeURL string) string {
+	switch typeURL {
+	case resource.ListenerType, resource.RouteType, resource.ClusterType:
+		return "services"
+	case resource.EndpointType:
+		return "endpoints"
+	default:
+		return ""
 	}
 }
 
-// Snap throws the list of the passed Service and EndpointSlice watchers
-// resources into a snapshot
-func (s *Snapshotter) Snap(sw *kube.ServiceWatcher, ew *kube.EndpointSliceWatcher) error {
+func NewSnapshotter(port uint) *Snapshotter {
+	servicesCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger)
+	endpointsCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger) // This could be a linear cache? https://pkg.go.dev/github.com/envoyproxy/go-control-plane/pkg/cache/v3#LinearCache
+	muxCache := cache.MuxCache{
+		Classify: func(r *cache.Request) string {
+			return mapTypeURL(r.TypeUrl)
+		},
+		ClassifyDelta: func(r *cache.DeltaRequest) string {
+			return mapTypeURL(r.TypeUrl)
+		},
+		Caches: map[string]cache.Cache{
+			"services":  servicesCache,
+			"endpoints": endpointsCache,
+		},
+	}
+	return &Snapshotter{
+		servePort:      port,
+		servicesCache:  servicesCache,
+		endpointsCache: endpointsCache,
+		muxCache:       muxCache,
+	}
+}
+
+// SnapServices dumps the list of watched Kubernetes Services into services
+// snapshot
+func (s *Snapshotter) SnapServices(sw *kube.ServiceWatcher) error {
 	ctx := context.Background()
 	cls, rds, lsnr, err := servicesToResources(sw)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
 	}
-	eds, err := endpointSlicesToClusterLoadAssignments(ew)
-	if err != nil {
-		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
-	}
-
-	atomic.AddInt32(&s.version, 1)
+	atomic.AddInt32(&s.serviceSnapVersion, 1)
 	nodeID := "" // Dummy empty node ID
-	// Refactor to something like:
-	// https://github.com/wongnai/xds/blob/5e94e78816be973880f73e947aa4306610b100a6/snapshot/resource.go
-	// see if we can save some work by snapshotting services and endpointslices separately
 	resources := map[string][]types.Resource{
-		resource.EndpointType: eds,
 		resource.ClusterType:  cls,
 		resource.ListenerType: lsnr,
 		resource.RouteType:    rds,
 	}
-	s.snapshot, err = cache.NewSnapshot(fmt.Sprint(s.version), resources)
-	err = s.Cache.SetSnapshot(ctx, nodeID, s.snapshot)
+	snapshot, err := cache.NewSnapshot(fmt.Sprint(s.serviceSnapVersion), resources)
+	err = s.servicesCache.SetSnapshot(ctx, nodeID, snapshot)
 	if err != nil {
-		return fmt.Errorf("Failed to set snapshot %v", err)
+		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
+	return nil
+}
 
+// SnapEndpoints dumps the list of watched Kubernetes EndpointSlices into
+// endoints snapshot
+func (s *Snapshotter) SnapEndpoints(ew *kube.EndpointSliceWatcher) error {
+	ctx := context.Background()
+	eds, err := endpointSlicesToClusterLoadAssignments(ew)
+	if err != nil {
+		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
+	}
+	atomic.AddInt32(&s.endpointsSnapVersion, 1)
+	nodeID := "" // Dummy empty node ID
+	resources := map[string][]types.Resource{
+		resource.EndpointType: eds,
+	}
+	snapshot, err := cache.NewSnapshot(fmt.Sprint(s.endpointsSnapVersion), resources)
+	err = s.endpointsCache.SetSnapshot(ctx, nodeID, snapshot)
+	if err != nil {
+		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
+	}
 	return nil
 }
 
@@ -134,7 +174,7 @@ func (s *Snapshotter) OnFetchResponse(req *discovery.DiscoveryRequest, resp *dis
 func (s *Snapshotter) ListenAndServe() {
 	ctx := context.Background()
 
-	xdsServer := xds.NewServer(ctx, s.Cache, s)
+	xdsServer := xds.NewServer(ctx, &s.muxCache, s)
 	grpcOptions := []grpc.ServerOption{grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams)}
 	grpcServer := grpc.NewServer(grpcOptions...)
 	registerServices(grpcServer, xdsServer)
@@ -168,7 +208,13 @@ func runGrpcServer(ctx context.Context, grpcServer *grpc.Server, port uint) {
 }
 
 func (s *Snapshotter) debugDiscoveryRequest(r *discovery.DiscoveryRequest) {
-	nodeSnap, _ := s.Cache.GetSnapshot(r.GetNode().GetId())
+	var nodeSnap cache.ResourceSnapshot
+	if mapTypeURL(r.GetTypeUrl()) == "services" {
+		nodeSnap, _ = s.servicesCache.GetSnapshot(r.GetNode().GetId())
+	}
+	if mapTypeURL(r.GetTypeUrl()) == "endpoints" {
+		nodeSnap, _ = s.endpointsCache.GetSnapshot(r.GetNode().GetId())
+	}
 	if nodeSnap == nil {
 		return
 	}
@@ -192,5 +238,4 @@ func (s *Snapshotter) debugDiscoveryRequest(r *discovery.DiscoveryRequest) {
 			log.Logger.Debug("Available resources list", "names", names)
 		}
 	}
-
 }
