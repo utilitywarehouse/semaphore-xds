@@ -3,16 +3,12 @@
 package xds
 
 import (
-	"fmt"
-
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
+	"github.com/utilitywarehouse/semaphore-xds/log"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	discoveryv1 "k8s.io/api/discovery/v1"
-
-	"github.com/utilitywarehouse/semaphore-xds/kube"
-	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
 const (
@@ -91,16 +87,11 @@ func clusterLoadAssignment(clusterName string, lEndpoints []*endpointv3.Locality
 
 // readServiceEndpoints lists all watched EndpointSlices into ServiceEndpoints.
 // It will group endpointslices based on the `kubernetes.io/service-name` label.
-func readServiceEndpoints(ew *kube.EndpointSliceWatcher) (ServiceEndpoints, error) {
-	eps, err := ew.List()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to list EndpointSlices from watcher: %v", err)
-	}
-
+func readServiceEndpoints(endpointSlices []*discoveryv1.EndpointSlice) (ServiceEndpoints, error) {
 	seps := ServiceEndpoints{}
-	for _, ep := range eps {
+	for _, ep := range endpointSlices {
 		if serviceName, ok := ep.Labels[endpointSliceServiceLabel]; !ok {
-			log.Logger.Warn("Ignoring service with missing ownership label", "service", serviceName, "label", endpointSliceServiceLabel)
+			log.Logger.Warn("Ignoring endpointSlice with missing ownership label", "endpointSlice", ep.Name, "label", endpointSliceServiceLabel)
 			continue
 		} else {
 			if _, ok := seps[serviceName]; !ok {
@@ -155,9 +146,9 @@ func createClustersForServiceEndpoints(seps ServiceEndpoints) EdsClusters {
 
 // endpointSlicesToClusterLoadAssignments expects an EndpointSlice watcher and
 // will list watched resources as a clusterLoadAssignment
-func endpointSlicesToClusterLoadAssignments(ew *kube.EndpointSliceWatcher) ([]types.Resource, error) {
+func endpointSlicesToClusterLoadAssignments(endpointSlices []*discoveryv1.EndpointSlice) ([]types.Resource, error) {
 	eds := []types.Resource{}
-	seps, err := readServiceEndpoints(ew)
+	seps, err := readServiceEndpoints(endpointSlices)
 	if err != nil {
 		return nil, err
 	}

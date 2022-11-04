@@ -17,8 +17,9 @@ import (
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"google.golang.org/grpc"
+	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 
-	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
@@ -70,9 +71,9 @@ func NewSnapshotter(port uint) *Snapshotter {
 
 // SnapServices dumps the list of watched Kubernetes Services into services
 // snapshot
-func (s *Snapshotter) SnapServices(sw *kube.ServiceWatcher) error {
+func (s *Snapshotter) SnapServices(services []*v1.Service) error {
 	ctx := context.Background()
-	cls, rds, lsnr, err := servicesToResources(sw)
+	cls, rds, lsnr, err := servicesToResources(services)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
 	}
@@ -93,9 +94,9 @@ func (s *Snapshotter) SnapServices(sw *kube.ServiceWatcher) error {
 
 // SnapEndpoints dumps the list of watched Kubernetes EndpointSlices into
 // endoints snapshot
-func (s *Snapshotter) SnapEndpoints(ew *kube.EndpointSliceWatcher) error {
+func (s *Snapshotter) SnapEndpoints(endpointSlices []*discoveryv1.EndpointSlice) error {
 	ctx := context.Background()
-	eds, err := endpointSlicesToClusterLoadAssignments(ew)
+	eds, err := endpointSlicesToClusterLoadAssignments(endpointSlices)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
 	}

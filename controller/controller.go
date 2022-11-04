@@ -97,9 +97,17 @@ func (c *Controller) endpointSliceEventHandler(eventType watch.EventType, old *d
 }
 
 func (c *Controller) reconcileServices() error {
-	return c.snapshotter.SnapServices(c.serviceWatcher)
+	services, err := c.serviceWatcher.List()
+	if err != nil {
+		return fmt.Errorf("Failed to list Services from watcher: %v", err)
+	}
+	return c.snapshotter.SnapServices(services)
 }
 
 func (c *Controller) reconcileEndpointSlices() error {
-	return c.snapshotter.SnapEndpoints(c.endpointSliceWatcher)
+	endpointSlices, err := c.endpointSliceWatcher.List()
+	if err != nil {
+		return fmt.Errorf("Failed to list EndpointSlices from watcher: %v", err)
+	}
+	return c.snapshotter.SnapEndpoints(endpointSlices)
 }

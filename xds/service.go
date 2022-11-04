@@ -12,8 +12,8 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"google.golang.org/protobuf/types/known/anypb"
+	v1 "k8s.io/api/core/v1"
 
-	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
@@ -91,16 +91,11 @@ func makeCluster(name, namespace string, port int32) *clusterv3.Cluster {
 
 // servicesToResources will return a set of listener, routeConfiguration and
 // cluster for each service port
-func servicesToResources(sw *kube.ServiceWatcher) ([]types.Resource, []types.Resource, []types.Resource, error) {
+func servicesToResources(services []*v1.Service) ([]types.Resource, []types.Resource, []types.Resource, error) {
 	var cls []types.Resource
 	var rds []types.Resource
 	var lsnr []types.Resource
-
-	svcs, err := sw.List()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	for _, service := range svcs {
+	for _, service := range services {
 		for _, port := range service.Spec.Ports {
 			routeConfig := makeRouteConfig(service.Name, service.Namespace, port.Port)
 			rds = append(rds, routeConfig)
