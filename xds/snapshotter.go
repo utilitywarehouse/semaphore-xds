@@ -69,6 +69,14 @@ func NewSnapshotter(port uint) *Snapshotter {
 	}
 }
 
+func (s *Snapshotter) ServicesSnapshot(nodeID string) (cache.ResourceSnapshot, error) {
+	return s.servicesCache.GetSnapshot(nodeID)
+}
+
+func (s *Snapshotter) EndpointsSnapshot(nodeID string) (cache.ResourceSnapshot, error) {
+	return s.endpointsCache.GetSnapshot(nodeID)
+}
+
 // SnapServices dumps the list of watched Kubernetes Services into services
 // snapshot
 func (s *Snapshotter) SnapServices(services []*v1.Service) error {

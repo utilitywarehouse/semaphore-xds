@@ -7,6 +7,7 @@ import (
 	"github.com/utilitywarehouse/semaphore-xds/controller"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
+	"github.com/utilitywarehouse/semaphore-xds/metrics"
 	"github.com/utilitywarehouse/semaphore-xds/xds"
 )
 
@@ -45,6 +46,7 @@ func main() {
 	}
 
 	snapshotter := xds.NewSnapshotter(*flagServerListenPort)
+	metrics.InitSnapMetricsCollector(snapshotter)
 
 	controller := controller.NewController(
 		client,

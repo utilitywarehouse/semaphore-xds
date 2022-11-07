@@ -3,13 +3,9 @@ package xds
 import (
 	"testing"
 
-	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/utilitywarehouse/semaphore-xds/log"
-	"google.golang.org/protobuf/types/known/anypb"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -177,7 +173,7 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 	// the passed address
 	assert.Equal(t, 2, len(snap.GetResources(resource.EndpointType)))
 	for _, res := range snap.GetResources(resource.EndpointType) {
-		eds, err := unmarshalResourceToEndpoint(res)
+		eds, err := UnmarshalResourceToEndpoint(res)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -197,7 +193,7 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 	// the new address
 	assert.Equal(t, 2, len(snap.GetResources(resource.EndpointType)))
 	for _, res := range snap.GetResources(resource.EndpointType) {
-		eds, err := unmarshalResourceToEndpoint(res)
+		eds, err := UnmarshalResourceToEndpoint(res)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -206,14 +202,4 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.2.2.2", lbEndpoint.Address.GetSocketAddress().Address)
 	}
-}
-
-func unmarshalResourceToEndpoint(res types.Resource) (*endpointv3.ClusterLoadAssignment, error) {
-	eds := &endpointv3.ClusterLoadAssignment{}
-	data, _ := anypb.New(res)
-	err := ptypes.UnmarshalAny(data, eds)
-	if err != nil {
-		return nil, err
-	}
-	return eds, nil
 }
