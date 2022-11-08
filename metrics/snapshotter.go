@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"strings"
 
 	cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
@@ -100,7 +101,7 @@ func (c *snapMetricsCollector) collectListenerMetrics(ch chan<- prometheus.Metri
 		}
 		manager, err := xds.ExtractManagerFromListener(listener)
 		if err != nil {
-			log.Logger.Error("Failed to extract manager from listeber", "err", err)
+			log.Logger.Error("Failed to extract manager from listener", "err", err)
 			continue
 		}
 		routeConfigName := manager.GetRouteConfig().Name
@@ -164,12 +165,14 @@ func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metr
 		for _, lbEndpoints := range endpoint.Endpoints {
 			for _, lbEndpoint := range lbEndpoints.GetLbEndpoints() {
 				healthStatus := xds.ParseLbEndpointHealthStatus(lbEndpoint.HealthStatus)
+				socketAddress := lbEndpoint.GetEndpoint().Address.GetSocketAddress()
+				address := fmt.Sprintf("%s:%s", socketAddress.GetAddress(), fmt.Sprint(socketAddress.GetPortValue()))
 				ch <- prometheus.MustNewConstMetric(
-					c.ClusterInfo,
+					c.EndpointInfo,
 					prometheus.GaugeValue,
 					1,
 					// "type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status"
-					resource.EndpointType, endpoint.ClusterName, lbEndpoints.GetLocality().Zone, lbEndpoints.GetLocality().SubZone, lbEndpoint.GetEndpoint().Address.String(), healthStatus,
+					resource.EndpointType, endpoint.ClusterName, lbEndpoints.GetLocality().Zone, lbEndpoints.GetLocality().SubZone, address, healthStatus,
 				)
 			}
 		}

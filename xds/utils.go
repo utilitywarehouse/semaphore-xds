@@ -91,8 +91,7 @@ func UnmarshalResourceToEndpoint(res types.Resource) (*endpointv3.ClusterLoadAss
 func ExtractManagerFromListener(listener *listenerv3.Listener) (*managerv3.HttpConnectionManager, error) {
 	apiListerner := listener.ApiListener.ApiListener
 	manager := &managerv3.HttpConnectionManager{}
-	data, _ := anypb.New(apiListerner)
-	err := ptypes.UnmarshalAny(data, manager)
+	err := ptypes.UnmarshalAny(apiListerner, manager)
 	if err != nil {
 		return nil, err
 	}

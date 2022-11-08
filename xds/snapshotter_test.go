@@ -141,7 +141,7 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 			Name:      "foo",
 			Namespace: "bar",
 			Labels: map[string]string{
-				endpointSliceServiceLabel: "foobar",
+				EndpointSliceServiceLabel: "foobar",
 			},
 		},
 		Endpoints: []discoveryv1.Endpoint{
