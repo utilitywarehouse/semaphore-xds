@@ -8,56 +8,56 @@ import (
 var (
 	queueDepth = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "semaphore_service_mirror_queue_depth",
+			Name: "semaphore_xds_queue_depth",
 			Help: "Workqueue depth, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueAdds = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "semaphore_service_mirror_queue_adds_total",
+			Name: "semaphore_xds_queue_adds_total",
 			Help: "Workqueue adds, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "semaphore_service_mirror_queue_latency_duration_seconds",
+			Name: "semaphore_xds_queue_latency_duration_seconds",
 			Help: "Workqueue latency, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueWorkDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "semaphore_service_mirror_queue_work_duration_seconds",
+			Name: "semaphore_xds_queue_work_duration_seconds",
 			Help: "Workqueue work duration, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueUnfinishedWork = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "semaphore_service_mirror_queue_unfinished_work_seconds",
+			Name: "semaphore_xds_queue_unfinished_work_seconds",
 			Help: "Unfinished work in seconds, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueLongestRunningProcessor = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "semaphore_service_mirror_queue_longest_running_processor_seconds",
+			Name: "semaphore_xds_queue_longest_running_processor_seconds",
 			Help: "Longest running processor, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueRetries = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "semaphore_service_mirror_queue_retries_total",
+			Name: "semaphore_xds_queue_retries_total",
 			Help: "Workqueue retries, by queue name",
 		},
 		[]string{"name"},
 	)
 	queueRequeued = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "semaphore_service_mirror_queue_requeued_items",
+			Name: "semaphore_xds_queue_requeued_items",
 			Help: "Items that have been requeued but not reconciled yet, by queue name",
 		},
 		[]string{"name"},

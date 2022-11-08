@@ -7,13 +7,13 @@ import (
 
 var (
 	kubeWatcherObjects = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "semaphore_service_mirror_kube_watcher_objects",
+		Name: "semaphore_xds_kube_watcher_objects",
 		Help: "Number of objects watched, by watcher and kind",
 	},
 		[]string{"kind"},
 	)
 	kubeWatcherEvents = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "semaphore_service_mirror_kube_watcher_events_total",
+		Name: "semaphore_xds_kube_watcher_events_total",
 		Help: "Number of events handled, by watcher, kind and event_type",
 	},
 		[]string{"kind", "event_type"},
