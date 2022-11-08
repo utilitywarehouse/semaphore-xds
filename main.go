@@ -19,7 +19,7 @@ var (
 	flagKubeConfigPath    = flag.String("kube-config", getEnv("SXDS_KUBE_CONFIG", ""), "Path of a kube config file, if not provided the app will try to get in cluster config")
 	flagLogLevel          = flag.String("log-level", getEnv("SXDS_LOG_LEVEL", "info"), "Log level")
 	flagNamespace         = flag.String("namespace", getEnv("SXDS_NAMESPACE", ""), "The namespace in which to watch for kubernetes resources")
-	flagLabelSelector     = flag.String("label-selector", getEnv("SXDS_LABEL_SELECTOR", "xds.semaphore.uw.io/enabled=true"), "Label selector for watched kubernetes resources")
+	flagLabelSelector     = flag.String("label-selector", getEnv("SXDS_LABEL_SELECTOR", "xds.semaphore.uw.systems/enabled=true"), "Label selector for watched kubernetes resources")
 	flagServerListenPort  = flag.Uint("server-listen-port", 18000, "xDS server listen port")
 	flagMetricsListenPort = flag.String("metrics-listen-port", "8080", "Listen port to serve prometheus metrics")
 )
@@ -52,7 +52,7 @@ func main() {
 
 	snapshotter := xds.NewSnapshotter(*flagServerListenPort)
 	metrics.InitSnapMetricsCollector(snapshotter)
-	serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
+	go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
 
 	controller := controller.NewController(
 		client,
