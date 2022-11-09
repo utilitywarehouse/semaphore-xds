@@ -50,4 +50,49 @@ The expected server address will follow the pattern:
 For example `xds:///grpc-echo-server.labs:50051`
 Careful that this is not a DNS name, so we cannot append a domain there!
 
+# Metrics
 
+There are separate metrics available that one can use to determine the status
+of the controller. The available metrics can give a visibility on errors from
+the Kubernetes clients, the watchers and the controller's queues. In addition to
+these, there are metrics available to provide visibility over the resources
+stored in the snapshot.
+
+## Kubernetes Client Metrics
+
+- `semaphore_xds_kube_http_request_total`: Total number of HTTP requests to the
+  Kubernetes API by host, code and method.
+- `semaphore_xds_kube_http_request_duration_seconds`: Histogram of latencies for
+  HTTP requests to the Kubernetes API by host and method
+
+## Kubernetes Watcher Metrics
+
+- `semaphore_xds_kube_watcher_objects`: Number of objects watched by kind
+- `semaphore_xds_kube_watcher_events_total`: Number of events handled by kind
+  and event_type
+
+## Queue Metrics
+
+- `semaphore_xds_queue_depth`: Workqueue depth, by queue name.
+- `semaphore_xds_queue_adds_total`: Workqueue adds, by queue name.
+- `semaphore_xds_queue_latency_duration_seconds`: Workqueue latency, by queue
+  name.
+- `semaphore_xds_queue_work_duration_seconds`: Workqueue work duration, by queue
+  name.
+- `semaphore_xds_queue_unfinished_work_seconds`: Unfinished work in seconds, by
+  queue name.
+- `semaphore_xds_queue_longest_running_processor_seconds`: Longest running
+  processor, by queue name.
+- `semaphore_xds_queue_retries_total`: Workqueue retries, by queue name.
+- `semaphore_xds_queue_requeued_items`: Items that have been requeued but not
+  reconciled yet, by queue name.
+
+## Snapshot Metrics
+
+- `semaphore_xds_snapshot_cluster`: xDS cluster info by name, lb policy and
+  discovery type.
+- `semaphore_xds_snapshot_listener`: xDS listener info by name and target route.
+- `semaphore_xds_snapshot_endpoint`: xDS cluster load assignment endpoints info
+  by cluster, locality zone and subzone, address and health.
+- `semaphore_xds_snapshot_route`: xDS route configuration info by name, path,
+  target domains, virtual host and target cluster.

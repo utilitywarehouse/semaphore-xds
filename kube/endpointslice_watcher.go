@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
+	"github.com/utilitywarehouse/semaphore-xds/metrics"
 )
 
 type EndpointSliceEventHandler = func(eventType watch.EventType, old *discoveryv1.EndpointSlice, new *discoveryv1.EndpointSlice)
@@ -78,8 +79,8 @@ func (esw *EndpointSliceWatcher) Init() {
 }
 
 func (esw *EndpointSliceWatcher) handleEvent(eventType watch.EventType, oldObj, newObj *discoveryv1.EndpointSlice) {
-	//metrics.IncKubeWatcherEvents(esw.name, "endpointslice", esw.runner, eventType)
-	//metrics.SetKubeWatcherObjects(esw.name, "endpointslice", esw.runner, float64(len(esw.store.List())))
+	metrics.IncKubeWatcherEvents("endpointslice", eventType)
+	metrics.SetKubeWatcherObjects("endpointslice", float64(len(esw.store.List())))
 
 	if esw.eventHandler != nil {
 		esw.eventHandler(eventType, oldObj, newObj)

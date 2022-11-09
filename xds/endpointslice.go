@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	endpointSliceServiceLabel = "kubernetes.io/service-name"
+	EndpointSliceServiceLabel = "kubernetes.io/service-name"
 )
 
 // ServiceEndpoints groups of Kubernetes EndpointSlices for each Service
@@ -90,8 +90,8 @@ func clusterLoadAssignment(clusterName string, lEndpoints []*endpointv3.Locality
 func readServiceEndpoints(endpointSlices []*discoveryv1.EndpointSlice) (ServiceEndpoints, error) {
 	seps := ServiceEndpoints{}
 	for _, ep := range endpointSlices {
-		if serviceName, ok := ep.Labels[endpointSliceServiceLabel]; !ok {
-			log.Logger.Warn("Ignoring endpointSlice with missing ownership label", "endpointSlice", ep.Name, "label", endpointSliceServiceLabel)
+		if serviceName, ok := ep.Labels[EndpointSliceServiceLabel]; !ok {
+			log.Logger.Warn("Ignoring endpointSlice with missing ownership label", "endpointSlice", ep.Name, "label", EndpointSliceServiceLabel)
 			continue
 		} else {
 			if _, ok := seps[serviceName]; !ok {
