@@ -14,14 +14,16 @@ xDS is the protocol initially used by Envoy, that is evolving into a universal d
 
 https://github.com/grpc/grpc-go/blob/master/examples/features/xds/README.md
 
-# How to use - Server side
+# How to use
+
+## Server side
 
 Deploy the server [manifests](./deploy/kustomize) in your cluster. The server
 needs a [ClusterRole](./deploy/kustomize/cluster/rbac.yaml) to allow it to see
 all Services and EndpointSlices in the cluster, and a namespaced [deployment](
 ./deploy/kustomize/namespaced/).
 
-# How to use - Client side
+## Client side
 
 The user's grpc client needs to specify a config map in json config to point to
 the xDS server, like:
@@ -40,7 +42,9 @@ the xDS server, like:
   ]
 }
 ```
-and expose the location as `GRPC_XDS_BOOTSTRAP` env var.
+and expose the location as `GRPC_XDS_BOOTSTRAP` env var. Alternatively, one can
+pass the json content as string in `GRPC_XDS_BOOTSTRAP_CONFIG` environment
+variable.
 
 Then you need to import the following module in the client code:
 `_ "google.golang.org/grpc/xds"` and call the call xds server addresses.
@@ -49,6 +53,17 @@ The expected server address will follow the pattern:
 
 For example `xds:///grpc-echo-server.labs:50051`
 Careful that this is not a DNS name, so we cannot append a domain there!
+
+## Mutate - Kyverno
+
+The client above configuration should be identical for all clients living in the
+same cluster, assuming only one xDS server is deployed. In such case, it is
+handy to use a mutation hook to inject the needed environment variable to your
+client pods. A Kustomize base to achieve that using Kyverno is provided [here](
+./deploy/kustomize/kyverno/mutate/). This is assuming semaphore-xds is deployed
+under a namespace called `sys-semaphore` so patch if needed. Your pods will need
+to be labeled with `xds.semaphore.uw.systems/client: "true"` in order to be
+selected by the mutating rule.
 
 # Metrics
 
