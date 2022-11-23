@@ -17,6 +17,10 @@ import (
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
+// LbPolicyLabel is the label used to specify load balancing policy for the
+// generated clusters per Kubernetes Service
+var LbPolicyLabel string
+
 func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfiguration {
 	routeName := makeRouteConfigName(name, namespace, port)
 	clusterName := makeClusterName(name, namespace, port)
@@ -73,12 +77,12 @@ func makeListener(name, namespace string, port int32, manager *anypb.Any) *liste
 	}
 }
 
-func makeCluster(name, namespace string, port int32) *clusterv3.Cluster {
+func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy) *clusterv3.Cluster {
 	clusterName := makeClusterName(name, namespace, port)
 	return &clusterv3.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
-		LbPolicy:             clusterv3.Cluster_ROUND_ROBIN,
+		LbPolicy:             policy,
 		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
 			EdsConfig: &corev3.ConfigSource{
 				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
@@ -87,6 +91,23 @@ func makeCluster(name, namespace string, port int32) *clusterv3.Cluster {
 			},
 		},
 	}
+}
+
+// extractClusterLbPolicy will parse the specified lb policy label in a
+// Kubernetes Service (if found) and return a clusterv3.Cluster_LbPolicy to be
+// used by the created clusters
+func extractClusterLbPolicy(service *v1.Service) clusterv3.Cluster_LbPolicy {
+	lbPolicyRaw, ok := service.Labels[LbPolicyLabel]
+	if !ok {
+		log.Logger.Info("No load balancing policy defined for service, defaulting to round robin", "service", service.Name)
+		return clusterv3.Cluster_ROUND_ROBIN
+	}
+	lbPolicy, err := parseToClusterLbPolicy(lbPolicyRaw)
+	if err != nil {
+		log.Logger.Error("Cannot parse load balancing policy, defaulting to round robin", "service", service.Name, "err", err)
+		return clusterv3.Cluster_ROUND_ROBIN
+	}
+	return lbPolicy
 }
 
 // servicesToResources will return a set of listener, routeConfiguration and
@@ -106,7 +127,7 @@ func servicesToResources(services []*v1.Service) ([]types.Resource, []types.Reso
 			}
 			listener := makeListener(service.Name, service.Namespace, port.Port, manager)
 			lsnr = append(lsnr, listener)
-			cluster := makeCluster(service.Name, service.Namespace, port.Port)
+			cluster := makeCluster(service.Name, service.Namespace, port.Port, extractClusterLbPolicy(service))
 			cls = append(cls, cluster)
 		}
 	}

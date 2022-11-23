@@ -54,6 +54,16 @@ The expected server address will follow the pattern:
 For example `xds:///grpc-echo-server.labs:50051`
 Careful that this is not a DNS name, so we cannot append a domain there!
 
+## Load Balancing Policies
+
+The user can set a label, by default `xds.semaphore.uw.systems/lb-policy`, in a
+Kubernetes Service resource to specify the load balancing algorithm for the
+respective clusters that will be generated and served by the xDS server.
+The supported values are derived from the envoy proxy library for [cluster lb
+policies](https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3#Cluster_LbPolicy).
+If none is set, or an invalid value is passed, the server configuration will
+default to round robin.
+
 ## Mutate - Kyverno
 
 The client above configuration should be identical for all clients living in the

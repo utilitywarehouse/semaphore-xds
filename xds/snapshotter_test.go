@@ -3,6 +3,7 @@ package xds
 import (
 	"testing"
 
+	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/utilitywarehouse/semaphore-xds/log"
@@ -12,6 +13,11 @@ import (
 )
 
 var testNodeID = ""
+
+func init() {
+	log.InitLogger("test-semaphore-xds", "debug")
+	LbPolicyLabel = "xds.semaphore.uw.systems/lb-policy"
+}
 
 func TestSnapServices_EmptyServiceList(t *testing.T) {
 	snapshotter := NewSnapshotter(uint(0))
@@ -97,6 +103,101 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 2, len(snap.GetResources(resource.ClusterType)))
 	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType)))
+}
+
+func TestSnapServices_DefaultLbPolicy(t *testing.T) {
+	snapshotter := NewSnapshotter(uint(0))
+	snapshotter.SnapServices([]*v1.Service{&v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "http",
+					Port: int32(80),
+				},
+			}},
+	}})
+	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Verify that our snapshot will have one cluster configured with
+	// round robin policy
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	for _, cl := range snap.GetResources(resource.ClusterType) {
+		cluster, err := UnmarshalResourceToCluster(cl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, clusterv3.Cluster_ROUND_ROBIN, cluster.LbPolicy)
+	}
+}
+
+func TestSnapServices_InvalidLbPolicy(t *testing.T) {
+	snapshotter := NewSnapshotter(uint(0))
+	snapshotter.SnapServices([]*v1.Service{&v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+			Labels:    map[string]string{LbPolicyLabel: "invalid"},
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "http",
+					Port: int32(80),
+				},
+			}},
+	}})
+	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Verify that our snapshot will have one cluster configured with
+	// round robin policy
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	for _, cl := range snap.GetResources(resource.ClusterType) {
+		cluster, err := UnmarshalResourceToCluster(cl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, clusterv3.Cluster_ROUND_ROBIN, cluster.LbPolicy)
+	}
+}
+
+func TestSnapServices_SetLbPolicy(t *testing.T) {
+	snapshotter := NewSnapshotter(uint(0))
+	snapshotter.SnapServices([]*v1.Service{&v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+			Labels:    map[string]string{LbPolicyLabel: "ring_hash"},
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "http",
+					Port: int32(80),
+				},
+			}},
+	}})
+	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Verify that our snapshot will have one cluster configured with
+	// round robin policy
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	for _, cl := range snap.GetResources(resource.ClusterType) {
+		cluster, err := UnmarshalResourceToCluster(cl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, clusterv3.Cluster_RING_HASH, cluster.LbPolicy)
+	}
 }
 
 func TestSnapEndpoints_EmptyEndpointsList(t *testing.T) {
