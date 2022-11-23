@@ -20,7 +20,7 @@ var (
 	flagLogLevel          = flag.String("log-level", getEnv("SXDS_LOG_LEVEL", "info"), "Log level")
 	flagNamespace         = flag.String("namespace", getEnv("SXDS_NAMESPACE", ""), "The namespace in which to watch for kubernetes resources")
 	flagLabelSelector     = flag.String("label-selector", getEnv("SXDS_LABEL_SELECTOR", "xds.semaphore.uw.systems/enabled=true"), "Label selector for watched kubernetes resources")
-	flagLbPolicyLabel     = flag.String("label-selector", getEnv("SXDS_LB_POLICY_SELECTOR", "xds.semaphore.uw.systems/lb-policy"), "Label to allow user to configure the lb policy for a Service clusters")
+	flagLbPolicyLabel     = flag.String("lb-policy-selector", getEnv("SXDS_LB_POLICY_SELECTOR", "xds.semaphore.uw.systems/lb-policy"), "Label to allow user to configure the lb policy for a Service clusters")
 	flagServerListenPort  = flag.Uint("server-listen-port", 18000, "xDS server listen port")
 	flagMetricsListenPort = flag.String("metrics-listen-port", "8080", "Listen port to serve prometheus metrics")
 )
