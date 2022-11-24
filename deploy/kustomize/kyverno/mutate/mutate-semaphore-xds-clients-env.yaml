@@ -28,9 +28,9 @@ spec:
             - (name): "*"
               env:
               - name: GRPC_XDS_BOOTSTRAP_CONFIG
-                value: '{"xds_servers": [{"server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000", "channel_creds": [{"type": "insecure"}], "server_features": ["xds_v3"]}]}'
+                value: '{"xds_servers": [{"server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000", "channel_creds": [{"type": "insecure"}], "server_features": ["xds_v3"]}], "node":{"id":"", "locality":{}}}'
           containers:
             - (name): "*"
               env:
               - name: GRPC_XDS_BOOTSTRAP_CONFIG
-                value: '{"xds_servers": [{"server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000", "channel_creds": [{"type": "insecure"}], "server_features": ["xds_v3"]}]}'
+                value: '{"xds_servers": [{"server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000", "channel_creds": [{"type": "insecure"}], "server_features": ["xds_v3"]}], "node":{"id":"", "locality":{}}}'
