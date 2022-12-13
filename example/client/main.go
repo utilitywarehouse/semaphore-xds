@@ -9,6 +9,8 @@ import (
 
 	echo "github.com/utilitywarehouse/semaphore-xds/example/client/echo"
 
+	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/xds"
 )
@@ -25,7 +27,12 @@ func main() {
 	log.Println("Looking up service %s", *flagGrpcServerAddress)
 
 	address := fmt.Sprintf("xds:///" + *flagGrpcServerAddress)
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	grpc_logrus.ReplaceGrpcLogger(logrus.NewEntry(logrus.StandardLogger()))
+	grpcDialOpts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithUnaryInterceptor(grpc_logrus.UnaryClientInterceptor(logrus.NewEntry(logrus.StandardLogger()))),
+	}
+	conn, err := grpc.Dial(address, grpcDialOpts...)
 	if err != nil {
 		log.Fatalf("Could not connect %v", err)
 	}
