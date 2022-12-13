@@ -6,10 +6,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	echo "github.com/utilitywarehouse/semaphore-xds/example/server/echo"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context"
@@ -77,7 +79,13 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(10)}
+	sopts := []grpc.ServerOption{
+		grpc.MaxConcurrentStreams(10),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle: 15 * time.Minute,
+			Time:              1 * time.Minute,
+		}),
+	}
 	log.Println("Starting grpcServer")
 	s := grpc.NewServer(sopts...)
 

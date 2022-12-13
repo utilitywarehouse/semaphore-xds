@@ -1,10 +1,11 @@
-module github.com/utilitywarehouse/semaphore-xds/example/client
+module github.com/utilitywarehouse/semaphore-xds/example/client-on-demand
 
 go 1.19
 
 require (
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
+	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.10
 	github.com/sirupsen/logrus v1.9.0
 	google.golang.org/grpc v1.51.0
 )

@@ -5,9 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"time"
+	"net/http"
 
-	echo "github.com/utilitywarehouse/semaphore-xds/example/client/echo"
+	"github.com/scaleway/scaleway-sdk-go/logger"
+	echo "github.com/utilitywarehouse/semaphore-xds/example/client-on-demand/echo"
 
 	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 	"github.com/sirupsen/logrus"
@@ -18,6 +19,8 @@ import (
 var (
 	flagGrpcServerAddress = flag.String("grpc-server-address", "", "Echo server address")
 )
+
+var echoServerClient echo.EchoServerClient
 
 func main() {
 	flag.Parse()
@@ -37,15 +40,26 @@ func main() {
 		log.Fatalf("Could not connect %v", err)
 	}
 	defer conn.Close()
+	echoServerClient = echo.NewEchoServerClient(conn)
+	sayHello()
 
-	c := echo.NewEchoServerClient(conn)
-	ctx := context.Background()
-	for {
-		r, err := c.SayHello(ctx, &echo.EchoRequest{Name: "unary RPC msg "})
-		if err != nil {
-			log.Printf("Could not get RPC %v\n", err)
-		}
-		log.Printf("RPC Response: %v", r)
-		time.Sleep(1 * time.Second)
+	http.HandleFunc("/", sayHelloHandler)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		logger.Errorf("%v", err)
 	}
+
+}
+
+func sayHello() string {
+	r, err := echoServerClient.SayHello(context.Background(), &echo.EchoRequest{Name: "unary RPC msg "})
+	if err != nil {
+		log.Printf("Could not get RPC %v\n", err)
+		return fmt.Sprintf("Could not get RPC %v\n", err)
+	}
+	log.Printf("RPC Response: %v", r)
+	return fmt.Sprintf("RPC Response: %v", r)
+}
+
+func sayHelloHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, sayHello())
 }
