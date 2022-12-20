@@ -42,9 +42,9 @@ func main() {
 	flag.Parse()
 	log.InitLogger("semaphore-xds", *flagLogLevel)
 
-	xds.LbPolicyLabel = *flagLbPolicyLabel
+	controller.LbPolicyLabel = *flagLbPolicyLabel
 
-	client, err := kube.ClientFromConfig(*flagKubeConfigPath)
+	client, err := kube.NewClientFromConfig(*flagKubeConfigPath)
 	if err != nil {
 		log.Logger.Error(
 			"cannot create kube client for local cluster",

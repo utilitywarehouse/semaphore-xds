@@ -1,4 +1,4 @@
-package controller
+package queue
 
 import (
 	"k8s.io/client-go/tools/cache"
@@ -9,11 +9,11 @@ import (
 )
 
 // queueReconcileFunc reconciles the object indicated by the name and namespace
-type queueReconcileFunc func() error
+type queueReconcileFunc func(name, namespace string) error
 
 // queue provides a rate-limited queue that processes items with a provided
 // reconcile function
-type queue struct {
+type Queue struct {
 	name          string
 	reconcileFunc queueReconcileFunc
 	queue         workqueue.RateLimitingInterface
@@ -21,8 +21,8 @@ type queue struct {
 }
 
 // newQueue returns a new queue
-func newQueue(name string, reconcileFunc queueReconcileFunc) *queue {
-	return &queue{
+func NewQueue(name string, reconcileFunc queueReconcileFunc) *Queue {
+	return &Queue{
 		name:          name,
 		reconcileFunc: reconcileFunc,
 		queue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
@@ -31,7 +31,7 @@ func newQueue(name string, reconcileFunc queueReconcileFunc) *queue {
 
 // Add an item to the queue, where that item is an object that
 // implements meta.Interface.
-func (q *queue) Add(obj interface{}) {
+func (q *Queue) Add(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		log.Logger.Error("couldn't create object key", "queue", q.name, "err", err)
@@ -41,7 +41,7 @@ func (q *queue) Add(obj interface{}) {
 }
 
 // Run processes items from the queue as they're added
-func (q *queue) Run() {
+func (q *Queue) Run() {
 	q.updateMetrics()
 	for q.processItem() {
 		q.updateMetrics()
@@ -49,12 +49,12 @@ func (q *queue) Run() {
 }
 
 // Stop causes the queue to shut down
-func (q *queue) Stop() {
+func (q *Queue) Stop() {
 	q.queue.ShutDown()
 }
 
 // processItem processes the next item in the queue
-func (q *queue) processItem() bool {
+func (q *Queue) processItem() bool {
 	key, shutdown := q.queue.Get()
 	if shutdown {
 		log.Logger.Info("queue shutdown", "queue", q.name)
@@ -80,7 +80,7 @@ func (q *queue) processItem() bool {
 		"namespace", namespace,
 		"name", name,
 	)
-	if err := q.reconcileFunc(); err != nil {
+	if err := q.reconcileFunc(name, namespace); err != nil {
 		log.Logger.Error(
 			"reconcile error",
 			"queue", q.name,
@@ -108,17 +108,17 @@ func (q *queue) processItem() bool {
 	return true
 }
 
-func (q *queue) requeue(key interface{}) {
+func (q *Queue) requeue(key interface{}) {
 	q.queue.AddRateLimited(key)
 	q.addRequeued(key.(string))
 }
 
-func (q *queue) forget(key interface{}) {
+func (q *Queue) forget(key interface{}) {
 	q.queue.Forget(key)
 	q.removeRequeued(key.(string))
 }
 
-func (q *queue) addRequeued(key string) {
+func (q *Queue) addRequeued(key string) {
 	for _, k := range q.requeued {
 		if k == key {
 			return
@@ -127,7 +127,7 @@ func (q *queue) addRequeued(key string) {
 	q.requeued = append(q.requeued, key)
 }
 
-func (q *queue) removeRequeued(key string) {
+func (q *Queue) removeRequeued(key string) {
 	for i, k := range q.requeued {
 		if k == key {
 			q.requeued = append(q.requeued[:i], q.requeued[i+1:]...)
@@ -136,6 +136,6 @@ func (q *queue) removeRequeued(key string) {
 	}
 }
 
-func (q *queue) updateMetrics() {
+func (q *Queue) updateMetrics() {
 	metrics.SetRequeued(q.name, float64(len(q.requeued)))
 }

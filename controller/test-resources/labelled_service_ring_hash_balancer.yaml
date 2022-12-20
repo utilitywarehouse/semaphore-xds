@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-echo-server
+  namespace: labs
+  labels:
+    xds.semaphore.uw.systems/enabled: "true"
+    xds.semaphore.uw.systems/lb-policy: "ring_hash"
+spec:
+  ports:
+    - name: grpc
+      port: 50051
+  selector:
+    app.kubernetes.io/name: grpc-echo-server

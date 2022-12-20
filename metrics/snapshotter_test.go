@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/mdlayher/promtest"
 	v1 "k8s.io/api/core/v1"
@@ -46,7 +47,7 @@ func TestSnapMetricsCollector(t *testing.T) {
 				Name:      "foo",
 				Namespace: "bar",
 				Labels: map[string]string{
-					xds.EndpointSliceServiceLabel: "foo",
+					"kubernetes.io/service-name": "foo", // TODO: importing from kube introduces a cycle
 				},
 			},
 			Endpoints: []discoveryv1.Endpoint{
@@ -81,16 +82,28 @@ func TestSnapMetricsCollector(t *testing.T) {
 		expectHttpClusterName   = "foo.bar.80"
 		expectHttpsClusterName  = "foo.bar.443"
 	)
+	serviceStore := xds.NewXdsServiceStore()
+	for _, s := range services {
+		serviceStore.AddOrUpdate(s, clusterv3.Cluster_ROUND_ROBIN)
+	}
+	endpointStore := xds.NewXdsEnpointStore()
+	for _, e := range endpointSlices {
+		endpointStore.Add("foo", "bar", e)
+	}
 	tests := []struct {
 		name           string
 		services       []*v1.Service
+		serviceStore   xds.XdsServiceStore
 		endpointSlices []*discoveryv1.EndpointSlice
+		endpointStore  xds.XdsEndpointStore
 		metrics        []string
 	}{
 		{
 			name:           "ok",
 			services:       services,
+			serviceStore:   serviceStore,
 			endpointSlices: endpointSlices,
+			endpointStore:  endpointStore,
 			metrics: []string{
 				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",route_config="%s",type="%s"} 1`, expectHttpListenerName, expectHttpRouteName, resource.ListenerType),
 				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",route_config="%s",type="%s"} 1`, expectHttpsListenerName, expectHttpsRouteName, resource.ListenerType),
@@ -111,8 +124,8 @@ func TestSnapMetricsCollector(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshotter := xds.NewSnapshotter(uint(0))
-			snapshotter.SnapServices(tt.services)
-			snapshotter.SnapEndpoints(tt.endpointSlices)
+			snapshotter.SnapServices(tt.serviceStore)
+			snapshotter.SnapEndpoints(tt.endpointStore)
 			body := promtest.Collect(t, newSnapMetricsCollector(snapshotter))
 
 			if !promtest.Lint(t, body) {
