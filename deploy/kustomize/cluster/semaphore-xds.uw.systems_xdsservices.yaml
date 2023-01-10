@@ -1,0 +1,86 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: xdsservices.semaphore-xds.uw.systems
+spec:
+  group: semaphore-xds.uw.systems
+  names:
+    kind: XdsService
+    listKind: XdsServiceList
+    plural: xdsservices
+    shortNames:
+    - xdssvc
+    singular: xdsservice
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.service.name
+      name: Service
+      type: string
+    - jsonPath: .spec.loadBalancing.policy
+      name: LbPolicy
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: XdsService is the Schema for the XdsService of semaphore-xds
+          controller. An XdsService is defined as the configuration used to construct
+          a service that is served via the xDS server implemented by semaphore-xds
+          to load balance traffic to GRPC endpoints.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: XdsServiceSpec defines the desired config for a service served
+              via xDS
+            properties:
+              loadBalancing:
+                default:
+                  policy: round_robin
+                description: XdsServiceSpecLoadBalancing contains information regarding
+                  the Load Balancing policy
+                properties:
+                  policy:
+                    default: round_robin
+                    description: Policy is the name of the load balancing policy to
+                      be used
+                    type: string
+                type: object
+              service:
+                description: Service determines the Service resource to target
+                properties:
+                  name:
+                    description: Name is the name of the Kubernetes Service to target
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - service
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

@@ -18,6 +18,13 @@ rules:
       - get
       - list
       - watch
+  - apiGroups: ["semaphore-xds.uw.systems"]
+    resources:
+      - xdsservices
+    verbs:
+      - get
+      - list
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

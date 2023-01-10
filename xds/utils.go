@@ -13,6 +13,7 @@ import (
 	managerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/utilitywarehouse/semaphore-xds/log"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -123,24 +124,25 @@ func ParseClusterLbPolicy(policy clusterv3.Cluster_LbPolicy) string {
 
 // parseToClusterLbPolicy is the reverse of the above. Accepts a string and
 // returns a clusterv3.Cluster_LbPolicy.
-func parseToClusterLbPolicy(policy string) (clusterv3.Cluster_LbPolicy, error) {
+func ParseToClusterLbPolicy(policy string) clusterv3.Cluster_LbPolicy {
 	switch policy {
 	case "round_robin":
-		return clusterv3.Cluster_ROUND_ROBIN, nil
+		return clusterv3.Cluster_ROUND_ROBIN
 	case "least_request":
-		return clusterv3.Cluster_LEAST_REQUEST, nil
+		return clusterv3.Cluster_LEAST_REQUEST
 	case "ring_hash":
-		return clusterv3.Cluster_RING_HASH, nil
+		return clusterv3.Cluster_RING_HASH
 	case "random":
-		return clusterv3.Cluster_RANDOM, nil
+		return clusterv3.Cluster_RANDOM
 	case "maglev":
-		return clusterv3.Cluster_MAGLEV, nil
+		return clusterv3.Cluster_MAGLEV
 	case "cluster_provided":
-		return clusterv3.Cluster_CLUSTER_PROVIDED, nil
+		return clusterv3.Cluster_CLUSTER_PROVIDED
 	case "load_balancing_policy_config":
-		return clusterv3.Cluster_LOAD_BALANCING_POLICY_CONFIG, nil
+		return clusterv3.Cluster_LOAD_BALANCING_POLICY_CONFIG
 	default:
-		return 0, fmt.Errorf("Failed to parse unknown policy: %s", policy)
+		log.Logger.Warn("Failed to parse unkown policy, defaulting to round_robin", "policy", policy)
+		return clusterv3.Cluster_ROUND_ROBIN
 	}
 }
 

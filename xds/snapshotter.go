@@ -17,8 +17,6 @@ import (
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"google.golang.org/grpc"
-	v1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
@@ -79,21 +77,20 @@ func (s *Snapshotter) EndpointsSnapshot(nodeID string) (cache.ResourceSnapshot, 
 
 // SnapServices dumps the list of watched Kubernetes Services into services
 // snapshot
-func (s *Snapshotter) SnapServices(services []*v1.Service) error {
+func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	ctx := context.Background()
-	cls, rds, lsnr, err := servicesToResources(services)
+	cls, rds, lsnr, err := servicesToResources(serviceStore)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
 	}
 	atomic.AddInt32(&s.serviceSnapVersion, 1)
-	nodeID := "" // Dummy empty node ID
 	resources := map[string][]types.Resource{
 		resource.ClusterType:  cls,
 		resource.ListenerType: lsnr,
 		resource.RouteType:    rds,
 	}
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(s.serviceSnapVersion), resources)
-	err = s.servicesCache.SetSnapshot(ctx, nodeID, snapshot)
+	err = s.servicesCache.SetSnapshot(ctx, EmptyNodeID, snapshot)
 	if err != nil {
 		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
@@ -102,19 +99,18 @@ func (s *Snapshotter) SnapServices(services []*v1.Service) error {
 
 // SnapEndpoints dumps the list of watched Kubernetes EndpointSlices into
 // endoints snapshot
-func (s *Snapshotter) SnapEndpoints(endpointSlices []*discoveryv1.EndpointSlice) error {
+func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	ctx := context.Background()
-	eds, err := endpointSlicesToClusterLoadAssignments(endpointSlices)
+	eds, err := endpointSlicesToClusterLoadAssignments(endpointStore)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
 	}
 	atomic.AddInt32(&s.endpointsSnapVersion, 1)
-	nodeID := "" // Dummy empty node ID
 	resources := map[string][]types.Resource{
 		resource.EndpointType: eds,
 	}
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(s.endpointsSnapVersion), resources)
-	err = s.endpointsCache.SetSnapshot(ctx, nodeID, snapshot)
+	err = s.endpointsCache.SetSnapshot(ctx, EmptyNodeID, snapshot)
 	if err != nil {
 		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
 	}

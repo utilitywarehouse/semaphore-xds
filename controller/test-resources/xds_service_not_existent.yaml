@@ -1,0 +1,7 @@
+apiVersion: semaphore-xds.uw.systems/v1alpha1
+kind: XdsService
+metadata:
+  name: grpc-echo-server
+spec:
+  service:
+    name: grpc-echo-server

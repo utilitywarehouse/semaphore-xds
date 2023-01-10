@@ -3,6 +3,8 @@
 package xds
 
 import (
+	"fmt"
+
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -17,9 +19,65 @@ import (
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
-// LbPolicyLabel is the label used to specify load balancing policy for the
-// generated clusters per Kubernetes Service
-var LbPolicyLabel string
+// xdsService holds the data we need to represent a Kubernetes Service in xds
+// configuration
+type xdsService struct {
+	Service *v1.Service
+	Policy  clusterv3.Cluster_LbPolicy
+}
+
+// XdsServiceStore is a store of xdsService objects. It's meant It to be used
+// to populate a map of xdsService objects and passed to the snapshotter
+// so only add and get functions should be implemented. For new snapshots we
+// should create new stores
+type XdsServiceStore interface {
+	All() map[string]xdsService
+	AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy)
+	Get(service, namespace string) (xdsService, error)
+	key(service, namespace string) string
+}
+
+// xdsServiceStoreWrapper wraps the store interface and holds the store map
+type xdsServiceStoreWrapper struct {
+	store map[string]xdsService
+}
+
+// NewXdsServiceStore return a new ServiceEndpointStore
+func NewXdsServiceStore() *xdsServiceStoreWrapper {
+	return &xdsServiceStoreWrapper{
+		store: make(map[string]xdsService),
+	}
+}
+
+// All returns everything in the store
+func (s *xdsServiceStoreWrapper) All() map[string]xdsService {
+	return s.store
+}
+
+// AddOrUpdate adds or updates a Service in the store
+func (s *xdsServiceStoreWrapper) AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy) {
+	key := s.key(service.Name, service.Namespace)
+	s.store[key] = xdsService{
+		Service: service,
+		Policy:  policy,
+	}
+}
+
+// Get returns the stored xdsService for the respective Service name and
+// namespace
+func (s *xdsServiceStoreWrapper) Get(service, namespace string) (xdsService, error) {
+	key := s.key(service, namespace)
+	if svc, ok := s.store[key]; !ok {
+		return xdsService{}, fmt.Errorf("Service not found in store")
+	} else {
+		return svc, nil
+	}
+}
+
+// key constructs a store key from the given service name and namespace
+func (s *xdsServiceStoreWrapper) key(service, namespace string) string {
+	return fmt.Sprintf("%s.%s", service, namespace)
+}
 
 func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfiguration {
 	routeName := makeRouteConfigName(name, namespace, port)
@@ -93,41 +151,24 @@ func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_Lb
 	}
 }
 
-// extractClusterLbPolicy will parse the specified lb policy label in a
-// Kubernetes Service (if found) and return a clusterv3.Cluster_LbPolicy to be
-// used by the created clusters
-func extractClusterLbPolicy(service *v1.Service) clusterv3.Cluster_LbPolicy {
-	lbPolicyRaw, ok := service.Labels[LbPolicyLabel]
-	if !ok {
-		log.Logger.Info("No load balancing policy defined for service, defaulting to round robin", "service", service.Name)
-		return clusterv3.Cluster_ROUND_ROBIN
-	}
-	lbPolicy, err := parseToClusterLbPolicy(lbPolicyRaw)
-	if err != nil {
-		log.Logger.Error("Cannot parse load balancing policy, defaulting to round robin", "service", service.Name, "err", err)
-		return clusterv3.Cluster_ROUND_ROBIN
-	}
-	return lbPolicy
-}
-
 // servicesToResources will return a set of listener, routeConfiguration and
 // cluster for each service port
-func servicesToResources(services []*v1.Service) ([]types.Resource, []types.Resource, []types.Resource, error) {
+func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []types.Resource, []types.Resource, error) {
 	var cls []types.Resource
 	var rds []types.Resource
 	var lsnr []types.Resource
-	for _, service := range services {
-		for _, port := range service.Spec.Ports {
-			routeConfig := makeRouteConfig(service.Name, service.Namespace, port.Port)
+	for _, s := range serviceStore.All() {
+		for _, port := range s.Service.Spec.Ports {
+			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port)
 			rds = append(rds, routeConfig)
 			manager, err := makeManager(routeConfig)
 			if err != nil {
 				log.Logger.Error("Cannot create listener manager", "error", err)
 				continue
 			}
-			listener := makeListener(service.Name, service.Namespace, port.Port, manager)
+			listener := makeListener(s.Service.Name, s.Service.Namespace, port.Port, manager)
 			lsnr = append(lsnr, listener)
-			cluster := makeCluster(service.Name, service.Namespace, port.Port, extractClusterLbPolicy(service))
+			cluster := makeCluster(s.Service.Name, s.Service.Namespace, port.Port, s.Policy)
 			cls = append(cls, cluster)
 		}
 	}

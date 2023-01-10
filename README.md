@@ -20,8 +20,50 @@ https://github.com/grpc/grpc-go/blob/master/examples/features/xds/README.md
 
 Deploy the server [manifests](./deploy/kustomize) in your cluster. The server
 needs a [ClusterRole](./deploy/kustomize/cluster/rbac.yaml) to allow it to see
-all Services and EndpointSlices in the cluster, and a namespaced [deployment](
-./deploy/kustomize/namespaced/).
+all Service, EndpointSlice and XdsService resources in the cluster, and a
+namespaced [deployment](./deploy/kustomize/namespaced/).
+
+### Server configuration - XdsService
+
+In order to configure which services should be streamed as xds targets to
+clients by the server, users need to specify XdsService resources:
+```
+apiVersion: semaphore-xds.uw.systems/v1alpha1
+kind: XdsService
+metadata:
+  name: foo
+spec:
+  service:
+    name: <service-name>
+  loadBalancing:
+    policy: round_robin
+```
+
+### Server configuration - Service labels (legacy - to be removed in the future)
+
+Users can use the following labels on Service resources to instruct the xds
+server to stream the target:
+- `xds.semaphore.uw.systems/enabled: "true"`: to enable xds load balancing
+- `xds.semaphore.uw.systems/lb-policy: "<policy>"`: to specify the load
+  balancing policy
+
+If both are specified, configuration that comes from `XdsService` resources
+should be preferred than `Service` labels
+
+### Load Balancing Policies
+
+The supported values are derived from the envoy proxy library for [cluster lb
+policies](https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3#Cluster_LbPolicy).
+If none is set, or an invalid value is passed, the server configuration will
+default to round robin.
+
+### xDS service address
+
+The expected server address will follow the pattern:
+`xds:///<service-name>.<namespace>:<port>`.
+
+For example `xds:///grpc-echo-server.labs:50051`
+Careful that this is not a DNS name, so we cannot append a domain there!
 
 ## Client side
 
@@ -48,21 +90,6 @@ variable.
 
 Then you need to import the following module in the client code:
 `_ "google.golang.org/grpc/xds"` and call the call xds server addresses.
-The expected server address will follow the pattern:
-`xds:///<service-name>.<namespace>:<port>`.
-
-For example `xds:///grpc-echo-server.labs:50051`
-Careful that this is not a DNS name, so we cannot append a domain there!
-
-## Load Balancing Policies
-
-The user can set a label, by default `xds.semaphore.uw.systems/lb-policy`, in a
-Kubernetes Service resource to specify the load balancing algorithm for the
-respective clusters that will be generated and served by the xDS server.
-The supported values are derived from the envoy proxy library for [cluster lb
-policies](https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3#Cluster_LbPolicy).
-If none is set, or an invalid value is passed, the server configuration will
-default to round robin.
 
 ## Mutate - Kyverno
 
