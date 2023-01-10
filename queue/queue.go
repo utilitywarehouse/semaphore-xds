@@ -74,7 +74,7 @@ func (q *Queue) processItem() bool {
 		return true
 	}
 
-	log.Logger.Info(
+	log.Logger.Debug(
 		"reconciling item",
 		"queue", q.name,
 		"namespace", namespace,
@@ -96,7 +96,7 @@ func (q *Queue) processItem() bool {
 			"name", name,
 		)
 	} else {
-		log.Logger.Info(
+		log.Logger.Debug(
 			"successfully reconciled item",
 			"queue", q.name,
 			"namespace", namespace,
