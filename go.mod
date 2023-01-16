@@ -9,8 +9,7 @@ require (
 	github.com/mdlayher/promtest v0.0.0-20210824143500-998bde29eaa8
 	github.com/prometheus/client_golang v1.14.0
 	github.com/stretchr/testify v1.8.0
-	golang.org/x/exp v0.0.0-20221217163422-3c43f8badb15
-	google.golang.org/grpc v1.51.0
+	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.26.0
 	k8s.io/apimachinery v0.26.0
