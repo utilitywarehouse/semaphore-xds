@@ -3,37 +3,80 @@
 package xds
 
 import (
+	"fmt"
+
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
-	"github.com/utilitywarehouse/semaphore-xds/log"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	discoveryv1 "k8s.io/api/discovery/v1"
 )
 
-const (
-	EndpointSliceServiceLabel = "kubernetes.io/service-name"
-)
-
-// ServiceEndpoints groups of Kubernetes EndpointSlices for each Service
-type ServiceEndpoints map[string][]*discoveryv1.EndpointSlice
-
-// EdsClusterEndpoints will store EndpointSlice data needed in cluster creation
-type EdsClusterEndpoints struct {
-	addresses []string
-	port      int32
-	zone      string
-	subzone   string
-	healthy   bool
+// xdsEndpoint groups Kubernetes EndpointSlices for each Service
+type xdsEndpoint struct {
+	service        string                       // the name of the Kubernetes Service that owns the EndpointSlices
+	namespace      string                       // the Kubernetes namespace which holds the resources
+	endpointSlices []*discoveryv1.EndpointSlice // the Kubernetes EndpointSlices to feed endpoints
 }
 
-// EDSCluster holds the data to create an EDS cluster load assignment
-type EdsCluster struct {
-	endpoints []EdsClusterEndpoints
+// XdsEndpointStore is a store of xdsEndpoint objects. It shall be used
+// to populate a map of serviceEndpoint objects and passed to the snapshotter
+// so only add and get functions should be implemented. For new snapshots we
+// should create new stores
+type XdsEndpointStore interface {
+	All() map[string]xdsEndpoint
+	Add(service, namespace string, eps *discoveryv1.EndpointSlice)
+	Get(service, namespace string) xdsEndpoint
+	key(service, namespace string) string
 }
 
-// EdsClusters hold a map of EDS clusters
-type EdsClusters map[string]EdsCluster
+// ServiceEndpointStoreWrapper wraps the store interface and holds the store map
+type xdsEndpointStoreWrapper struct {
+	store map[string]xdsEndpoint
+}
+
+// NewServiceEnpointStore return a new ServiceEndpointStore
+func NewXdsEnpointStore() *xdsEndpointStoreWrapper {
+	return &xdsEndpointStoreWrapper{
+		store: make(map[string]xdsEndpoint),
+	}
+}
+
+// All returns everything in the store
+func (s *xdsEndpointStoreWrapper) All() map[string]xdsEndpoint {
+	return s.store
+}
+
+// Add adds an EndpointSlice to the store
+func (s *xdsEndpointStoreWrapper) Add(service, namespace string, eps *discoveryv1.EndpointSlice) {
+	key := s.key(service, namespace)
+	if se, ok := s.store[key]; !ok {
+		s.store[key] = xdsEndpoint{
+			service:        service,
+			namespace:      namespace,
+			endpointSlices: []*discoveryv1.EndpointSlice{eps},
+		}
+	} else {
+		se.endpointSlices = append(se.endpointSlices, eps)
+		s.store[key] = se
+	}
+}
+
+// Get returns the stored serviceEndpoint for the respective Service name and
+// namespace
+func (s *xdsEndpointStoreWrapper) Get(service, namespace string) xdsEndpoint {
+	key := s.key(service, namespace)
+	if se, ok := s.store[key]; !ok {
+		return xdsEndpoint{}
+	} else {
+		return se
+	}
+}
+
+// key constructs a store key from the given service name and namespace
+func (s *xdsEndpointStoreWrapper) key(service, namespace string) string {
+	return fmt.Sprintf("%s.%s", service, namespace)
+}
 
 func endpointAddress(address string, port int32) *corev3.Address {
 	return &corev3.Address{Address: &corev3.Address_SocketAddress{
@@ -85,24 +128,22 @@ func clusterLoadAssignment(clusterName string, lEndpoints []*endpointv3.Locality
 	}
 }
 
-// readServiceEndpoints lists all watched EndpointSlices into ServiceEndpoints.
-// It will group endpointslices based on the `kubernetes.io/service-name` label.
-func readServiceEndpoints(endpointSlices []*discoveryv1.EndpointSlice) (ServiceEndpoints, error) {
-	seps := ServiceEndpoints{}
-	for _, ep := range endpointSlices {
-		if serviceName, ok := ep.Labels[EndpointSliceServiceLabel]; !ok {
-			log.Logger.Warn("Ignoring endpointSlice with missing ownership label", "endpointSlice", ep.Name, "label", EndpointSliceServiceLabel)
-			continue
-		} else {
-			if _, ok := seps[serviceName]; !ok {
-				seps[serviceName] = []*discoveryv1.EndpointSlice{ep}
-			} else {
-				seps[serviceName] = append(seps[serviceName], ep)
-			}
-		}
-	}
-	return seps, nil
+// EdsClusterEndpoints will store EndpointSlice data needed in cluster creation
+type EdsClusterEndpoints struct {
+	addresses []string
+	port      int32
+	zone      string
+	subzone   string
+	healthy   bool
 }
+
+// EDSCluster holds the data to create an EDS cluster load assignment
+type EdsCluster struct {
+	endpoints []EdsClusterEndpoints
+}
+
+// EdsClusters hold a map of EDS clusters
+type EdsClusters map[string]EdsCluster
 
 // endpointSliceToClusterEndpoints will represent Kubernetes Endpoints as
 // EdsClusterEndpoints structured vars to be used when rendering snapshots
@@ -124,12 +165,12 @@ func endpointSliceToClusterEndpoints(e *discoveryv1.EndpointSlice) []EdsClusterE
 
 // createClustersForServiceEndpoints translates service endpoints into a list
 // of EDSCluster objects
-func createClustersForServiceEndpoints(seps ServiceEndpoints) EdsClusters {
+func createClustersFromEndpointStore(store XdsEndpointStore) EdsClusters {
 	clusters := make(EdsClusters)
-	for service, endpointSlices := range seps {
-		for _, e := range endpointSlices {
+	for _, serviceEndpoint := range store.All() {
+		for _, e := range serviceEndpoint.endpointSlices {
 			for _, ce := range endpointSliceToClusterEndpoints(e) {
-				clusterName := makeClusterName(service, e.Namespace, ce.port) // Let's assuume that Service and the respective EndpointSlice live in the same namespace
+				clusterName := makeClusterName(serviceEndpoint.service, serviceEndpoint.namespace, ce.port)
 				if c, ok := clusters[clusterName]; !ok {
 					clusters[clusterName] = EdsCluster{
 						endpoints: []EdsClusterEndpoints{ce},
@@ -146,13 +187,9 @@ func createClustersForServiceEndpoints(seps ServiceEndpoints) EdsClusters {
 
 // endpointSlicesToClusterLoadAssignments expects an EndpointSlice watcher and
 // will list watched resources as a clusterLoadAssignment
-func endpointSlicesToClusterLoadAssignments(endpointSlices []*discoveryv1.EndpointSlice) ([]types.Resource, error) {
+func endpointSlicesToClusterLoadAssignments(endpointStore XdsEndpointStore) ([]types.Resource, error) {
 	eds := []types.Resource{}
-	seps, err := readServiceEndpoints(endpointSlices)
-	if err != nil {
-		return nil, err
-	}
-	clusters := createClustersForServiceEndpoints(seps)
+	clusters := createClustersFromEndpointStore(endpointStore)
 	for name, cluster := range clusters {
 		var localityEps []*endpointv3.LocalityLbEndpoints
 		for _, endpoint := range cluster.endpoints {
