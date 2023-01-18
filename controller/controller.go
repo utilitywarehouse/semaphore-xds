@@ -6,6 +6,7 @@ import (
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v1 "k8s.io/api/core/v1"
+	kubeerror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
@@ -97,9 +98,21 @@ func (c *Controller) reconcileServices(name, namespace string) error {
 
 func (c *Controller) reconcileEndpointSlices(name, namespace string) error {
 	endpointSlice, err := c.client.EndpointSlice(name, namespace)
+	// If the EndpointSlice is not found assume it is deleted and refresh
+	// snaphot just in case
+	if kubeerror.IsNotFound(err) {
+		log.Logger.Info("Endpoint slice not found (probably deleted), refreshing snapshot")
+		svcs, err := c.servicesToXdsServiceStore()
+		if err != nil {
+			return err
+		}
+		return c.snapAll(svcs)
+	}
 	if err != nil {
 		return fmt.Errorf("Failed to get EndpointSlice: %s in namespace %s: %v", name, namespace, err)
 	}
+	// For any other update, check if the EndpointSlice belongs to a Service
+	// we expose and refresh snapshot accordingly
 	var parentSvcName string
 	var ok bool
 	if parentSvcName, ok = endpointSlice.Labels[kube.KubernetesIOServiceNameLabel]; !ok {
