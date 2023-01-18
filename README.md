@@ -35,8 +35,10 @@ spec:
   service:
     name: <service-name> # clients will access the service at: xds:///<service-name>.<namespace>:<port>
   loadBalancing:
-    policy: <policy-name>
+    policy: <policy-name> # Optional. Defaults to round_robin
 ```
+
+Note that an XdsService can only point to a Service under the same namespace.
 
 ### Configuration - Service labels (legacy - to be removed in the future)
 
