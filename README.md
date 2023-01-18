@@ -8,22 +8,21 @@ via an xDS server to clients.
 Currently the code is in super early development stage and should be considered
 alpha quality.
 
-# Why Envoy is involved in this (envoy modules to implement the needed resources and APIs)
-
-xDS is the protocol initially used by Envoy, that is evolving into a universal data plan API for service mesh.
-
-https://github.com/grpc/grpc-go/blob/master/examples/features/xds/README.md
-
 # How to use
 
 ## Server side
 
-Deploy the server [manifests](./deploy/kustomize) in your cluster. The server
-needs a [ClusterRole](./deploy/kustomize/cluster/rbac.yaml) to allow it to see
-all Service, EndpointSlice and XdsService resources in the cluster, and a
-namespaced [deployment](./deploy/kustomize/namespaced/).
+### Deployment
 
-### Server configuration - XdsService
+There are 2 kustomize bases to deploy the clustered and namespaced scoped
+resources:
+- [Clustered resources](./deploy/kustomize/cluster/) contain RBAC and CRD
+  definitions needed by the server to be able to watch Service, EndpointSlice
+  and XdsService resources in the ckuster.
+- [Namespaced resources](./deploy/kustomize/namespaced/) contain the manifests
+  to deploy the xds server.
+
+### Configuration - XdsService
 
 In order to configure which services should be streamed as xds targets to
 clients by the server, users need to specify XdsService resources:
@@ -34,12 +33,12 @@ metadata:
   name: foo
 spec:
   service:
-    name: <service-name>
+    name: <service-name> # clients will access the service at: xds:///<service-name>.<namespace>:<port>
   loadBalancing:
-    policy: round_robin
+    policy: <policy-name>
 ```
 
-### Server configuration - Service labels (legacy - to be removed in the future)
+### Configuration - Service labels (legacy - to be removed in the future)
 
 Users can use the following labels on Service resources to instruct the xds
 server to stream the target:
@@ -67,6 +66,8 @@ Careful that this is not a DNS name, so we cannot append a domain there!
 
 ## Client side
 
+### Bootstrap Config
+
 The user's grpc client needs to specify a config map in json config to point to
 the xDS server, like:
 ```
@@ -91,7 +92,7 @@ variable.
 Then you need to import the following module in the client code:
 `_ "google.golang.org/grpc/xds"` and call the call xds server addresses.
 
-## Mutate - Kyverno
+### Mutate Bootstrap Config - Kyverno
 
 The client above configuration should be identical for all clients living in the
 same cluster, assuming only one xDS server is deployed. In such case, it is
