@@ -6,6 +6,7 @@ import (
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -99,32 +100,21 @@ func (c *Controller) reconcileServices(name, namespace string) error {
 func (c *Controller) reconcileEndpointSlices(name, namespace string) error {
 	endpointSlice, err := c.client.EndpointSlice(name, namespace)
 	// If the EndpointSlice is not found assume it is deleted and refresh
-	// snaphot just in case
+	// Endpoints snapshot to make sure it's up to date
 	if kubeerror.IsNotFound(err) {
 		log.Logger.Info("Endpoint slice not found (probably deleted), refreshing snapshot")
-		svcs, err := c.servicesToXdsServiceStore()
-		if err != nil {
-			return err
-		}
-		return c.snapAll(svcs)
+		return c.snapEndpoints()
 	}
 	if err != nil {
 		return fmt.Errorf("Failed to get EndpointSlice: %s in namespace %s: %v", name, namespace, err)
 	}
 	// For any other update, check if the EndpointSlice belongs to a Service
-	// we expose and refresh snapshot accordingly
-	var parentSvcName string
-	var ok bool
-	if parentSvcName, ok = endpointSlice.Labels[kube.KubernetesIOServiceNameLabel]; !ok {
-		log.Logger.Warn("Did not find parent service for EndpointSlice %s in namespace %s, skipping", name, namespace)
-		return nil
-	}
+	// we expose and refresh snapshot if needed
 	svcs, err := c.servicesToXdsServiceStore()
 	if err != nil {
 		return err
 	}
-	needReconcile := isServiceInXdsServiceStore(parentSvcName, namespace, svcs)
-	if needReconcile {
+	if needToReconcileEndpointSlice(endpointSlice, svcs) {
 		return c.snapAll(svcs)
 	}
 	return nil
@@ -137,6 +127,20 @@ func (c *Controller) snapAll(store xds.XdsServiceStore) error {
 		return err
 	}
 	endpointStore, err := c.endpointsStoreForXdsServiceStore(store)
+	if err != nil {
+		return fmt.Errorf("Cannot list EndpointSlices for snapshotting: %v", err)
+	}
+	return c.snapshotter.SnapEndpoints(endpointStore)
+}
+
+// snapEndpoints will attempt to snap all endpointSlices from the passed
+// serices store
+func (c *Controller) snapEndpoints() error {
+	svcs, err := c.servicesToXdsServiceStore()
+	if err != nil {
+		return err
+	}
+	endpointStore, err := c.endpointsStoreForXdsServiceStore(svcs)
 	if err != nil {
 		return fmt.Errorf("Cannot list EndpointSlices for snapshotting: %v", err)
 	}
@@ -189,6 +193,18 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 // serviceKey concatenates a name and a namespace into a single string
 func serviceKey(name, namespace string) string {
 	return fmt.Sprintf("%s.%s", name, namespace)
+}
+
+// needToReconcileEndpointSlice returns true if we need to reconcile an
+// EndpointSlice
+func needToReconcileEndpointSlice(endpointSlice *discoveryv1.EndpointSlice, store xds.XdsServiceStore) bool {
+	var parentSvcName string
+	var ok bool
+	if parentSvcName, ok = endpointSlice.Labels[kube.KubernetesIOServiceNameLabel]; !ok {
+		log.Logger.Warn("Did not find parent service for EndpointSlice %s in namespace %s, skipping", endpointSlice.Name, endpointSlice.Namespace)
+		return false
+	}
+	return isServiceInXdsServiceStore(parentSvcName, endpointSlice.Namespace, store)
 }
 
 func isServiceInXdsServiceStore(name, namespace string, store xds.XdsServiceStore) bool {

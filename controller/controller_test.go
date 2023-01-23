@@ -1,11 +1,14 @@
 package controller
 
 import (
+	"fmt"
 	"testing"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/stretchr/testify/assert"
+	kubeerror "k8s.io/apimachinery/pkg/api/errors"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
@@ -268,4 +271,87 @@ func TestReconcileServices_XdsServiceDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, len(snap.GetResources(resource.EndpointType)))
+}
+
+func TestReconcileEndpointSlices_SnapOnUpdate(t *testing.T) {
+	client := kube.NewClientMock(
+		"./test-resources/xds_service.yaml",
+		"./test-resources/endpointslice.yaml",
+	)
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort)
+	controller := NewController(
+		client,
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+	// Reconciling an existing EndpointSlice should make sure to refresh the
+	// services and endpoints snaps
+	controller.reconcileEndpointSlices("grpc-echo-server-628fr", "labs")
+	snap, err := snapshotter.ServicesSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.EndpointType)))
+}
+
+func TestReconcileEndpointSlices_NotFound(t *testing.T) {
+	client := kube.NewClientMock(
+		"./test-resources/xds_service.yaml",
+		"./test-resources/endpointslice.yaml",
+	)
+	client.EndpointSliceApiError(kubeerror.NewNotFound(schema.GroupResource{Resource: "endpointslice"}, "foo"))
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort)
+	controller := NewController(
+		client,
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+	// If the EndpointSlice is not found the controller should assume it is
+	// deleted and refresh the Endpoints snapshot just in case.
+	controller.reconcileEndpointSlices("foo", "bar")
+	snap, err := snapshotter.ServicesSnapshot(testNodeID)
+	assert.Equal(t, fmt.Errorf("no snapshot found for node %s", testNodeID), err)
+	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.EndpointType)))
+}
+
+func TestReconcileEndpointSlices_NonXdsService(t *testing.T) {
+	client := kube.NewClientMock(
+		"./test-resources/endpointslice.yaml",
+	)
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort)
+	controller := NewController(
+		client,
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+	// Reconciling an existing EndpointSlice not belonging to an xDS service
+	// should not do anything
+	controller.reconcileEndpointSlices("grpc-echo-server-628fr", "labs")
+	_, err := snapshotter.ServicesSnapshot(testNodeID)
+	assert.Equal(t, fmt.Errorf("no snapshot found for node %s", testNodeID), err)
+	_, err = snapshotter.EndpointsSnapshot(testNodeID)
+	assert.Equal(t, fmt.Errorf("no snapshot found for node %s", testNodeID), err)
 }
