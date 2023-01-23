@@ -218,7 +218,7 @@ func isServiceInXdsServiceStore(name, namespace string, store xds.XdsServiceStor
 func extractClusterLbPolicyFromServiceLabel(service *v1.Service) clusterv3.Cluster_LbPolicy {
 	lbPolicyRaw, ok := service.Labels[LbPolicyLabel]
 	if !ok {
-		log.Logger.Info("No load balancing policy defined for service, defaulting to round robin", "service", service.Name)
+		log.Logger.Debug("No load balancing policy defined for service, defaulting to round robin", "service", service.Name)
 		return clusterv3.Cluster_ROUND_ROBIN
 	}
 	return xds.ParseToClusterLbPolicy(lbPolicyRaw)
