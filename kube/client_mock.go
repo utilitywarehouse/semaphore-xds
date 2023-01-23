@@ -98,6 +98,18 @@ func (c *clientMock) KubeClient() kubernetes.Interface {
 	return c.fakeClientset
 }
 
+func (c *clientMock) ServiceApiError(err error) {
+	c.apiServiceError = err
+}
+
+func (c *clientMock) EndpointSliceApiError(err error) {
+	c.apiEndpointsSliceError = err
+}
+
+func (c *clientMock) XdsServiceApiError(err error) {
+	c.apiXdsServiceError = err
+}
+
 // Service returns the named service from the given namespace.
 func (c *clientMock) Service(name, namespace string) (*corev1.Service, error) {
 	if c.apiServiceError != nil {
@@ -126,9 +138,6 @@ func (c *clientMock) EndpointSlice(name, namespace string) (*discoveryv1.Endpoin
 
 // EndpointSliceList returns all the EndpointSlices selected by a label
 func (c *clientMock) EndpointSliceList(labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
-	if c.apiEndpointsSliceError != nil {
-		return []*discoveryv1.EndpointSlice{}, c.apiEndpointsSliceError
-	}
 	return c.endpointSlices, nil
 }
 
