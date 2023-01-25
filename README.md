@@ -36,6 +36,7 @@ spec:
     name: <service-name> # clients will access the service at: xds:///<service-name>.<namespace>:<port>
   loadBalancing:
     policy: <policy-name> # Optional. Defaults to round_robin
+  allowRemoteEndpoints: false # Whether to look at remote clusters for service endpoints. Defaults to false
 ```
 
 Note that an XdsService can only point to a Service under the same namespace.

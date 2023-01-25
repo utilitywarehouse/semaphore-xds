@@ -22,6 +22,11 @@ type XdsServiceSpecLoadBalancing struct {
 
 // XdsServiceSpec defines the desired config for a service served via xDS
 type XdsServiceSpec struct {
+	// AllowRemoteEndpoints determines whether this Service should look for
+	// endpoints (EndpointSlices) in remote clusters.
+	// +optional
+	// +kubebuilder:default=false
+	AllowRemoteEndpoints *bool `json:"allowRemoteEndpoints,omitempty"`
 	// Service determines the Service resource to target
 	Service XdsServiceSpecService `json:"service"`
 	// +kubebuilder:default={policy:round_robin}

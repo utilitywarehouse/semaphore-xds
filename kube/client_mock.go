@@ -93,6 +93,10 @@ func (c *clientMock) WatchAll(crdQ, endpointSliceQ *queue.Queue, stopCh <-chan s
 	return nil
 }
 
+func (c *clientMock) WatchEndpointSlices(endpointSliceQ *queue.Queue, stopCh <-chan struct{}) error {
+	return nil
+}
+
 // KubeClient exports the kubernetes client interface
 func (c *clientMock) KubeClient() kubernetes.Interface {
 	return c.fakeClientset

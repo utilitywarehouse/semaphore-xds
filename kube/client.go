@@ -2,7 +2,13 @@ package kube
 
 import (
 	"fmt"
+	"io"
 	"time"
+
+	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
+	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -30,6 +36,39 @@ const (
 	KubernetesIOServiceNameLabel = "kubernetes.io/service-name"
 )
 
+type certMan struct {
+	caURL string
+}
+
+func (cm *certMan) verifyConn(cs tls.ConnectionState) error {
+	resp, err := http.Get(cm.caURL)
+	if err != nil {
+		return fmt.Errorf("error getting remote CA from %s: %v", cm.caURL, err)
+	}
+	defer func() {
+		io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected %d response from %s, got %d", http.StatusOK, cm.caURL, resp.StatusCode)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body from %s: %v", cm.caURL, err)
+	}
+	roots := x509.NewCertPool()
+	ok := roots.AppendCertsFromPEM(body)
+	if !ok {
+		return fmt.Errorf("failed to parse root certificate from %s", cm.caURL)
+	}
+	opts := x509.VerifyOptions{
+		DNSName: cs.ServerName,
+		Roots:   roots,
+	}
+	_, err = cs.PeerCertificates[0].Verify(opts)
+	return err
+}
+
 // ClientFromConfig returns a Kubernetes client (clientset) from the kubeconfig
 // path or from the in-cluster service account environment.
 func ClientFromConfig(path string) (*kubernetes.Clientset, error) {
@@ -54,6 +93,7 @@ func getClientConfig(path string) (*rest.Config, error) {
 // resources and update the stores.
 type Client interface {
 	WatchAll(crdQ, endpointSliceQ *queue.Queue, stopCh <-chan struct{}) error
+	WatchEndpointSlices(endpointSliceQ *queue.Queue, stopCh <-chan struct{}) error
 	KubeClient() kubernetes.Interface
 	Service(namespace, name string) (*corev1.Service, error)
 	EndpointSlice(name, namespace string) (*discoveryv1.EndpointSlice, error)
@@ -89,6 +129,30 @@ func NewClientFromConfig(path string) (*clientWrapper, error) {
 	}, nil
 }
 
+func NewClient(token, apiURL, caURL string) (*clientWrapper, error) {
+	cm := &certMan{caURL}
+	conf := &rest.Config{
+		Host: apiURL,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				VerifyConnection:   cm.verifyConn}},
+		BearerToken: token,
+	}
+	csKube, err := kubernetes.NewForConfig(conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kube client: %v", err)
+	}
+	csCRD, err := versioned.NewForConfig(conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CRD client: %v", err)
+	}
+	return &clientWrapper{
+		clientsetCRD:  csCRD,
+		clientsetKube: csKube,
+	}, nil
+}
+
 func (c *clientWrapper) WatchAll(crdQ, endpointSliceQ *queue.Queue, stopCh <-chan struct{}) error {
 	factoryCRD := externalversions.NewSharedInformerFactoryWithOptions(c.clientsetCRD, resyncPeriod, externalversions.WithNamespace(metav1.NamespaceAll))
 	factoryCRD.Semaphorexds().V1alpha1().XdsServices().Informer().AddEventHandler(newEventHandlerFunc(crdQ))
@@ -106,6 +170,20 @@ func (c *clientWrapper) WatchAll(crdQ, endpointSliceQ *queue.Queue, stopCh <-cha
 			return fmt.Errorf("timed out waiting for controller caches to sync %s", typ)
 		}
 	}
+	for typ, ok := range c.factoryKube.WaitForCacheSync(stopCh) {
+		if !ok {
+			return fmt.Errorf("timed out waiting for controller caches to sync %s", typ)
+		}
+	}
+	return nil
+}
+
+func (c *clientWrapper) WatchEndpointSlices(endpointSliceQ *queue.Queue, stopCh <-chan struct{}) error {
+	factoryKube := informers.NewSharedInformerFactoryWithOptions(c.clientsetKube, resyncPeriod, informers.WithNamespace(metav1.NamespaceAll))
+	factoryKube.Discovery().V1().EndpointSlices().Informer().AddEventHandler(newEventHandlerFunc(endpointSliceQ))
+	c.factoryKube = factoryKube
+
+	c.factoryKube.Start(stopCh)
 	for typ, ok := range c.factoryKube.WaitForCacheSync(stopCh) {
 		if !ok {
 			return fmt.Errorf("timed out waiting for controller caches to sync %s", typ)

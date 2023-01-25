@@ -1,37 +1,39 @@
 apiVersion: discovery.k8s.io/v1
 kind: EndpointSlice
 metadata:
+  generateName: grpc-echo-server-
+  generation: 3
   labels:
     endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
     kubernetes.io/service-name: grpc-echo-server
-  name: grpc-echo-server-628fr
+  name: grpc-echo-server-8mwr4
   namespace: labs
+addressType: IPv4
 endpoints:
 - addresses:
-  - 10.6.1.27
+  - 10.4.14.26
   conditions:
     ready: true
     serving: true
     terminating: false
-  nodeName: worker-0.exp-1.merit.uw.systems
+  nodeName: worker-k8s-exp-1-dxkp.c.uw-dev.internal
   targetRef:
     kind: Pod
-    name: grpc-echo-server-cdc5f9557-k2vj5
+    name: grpc-echo-server-7f9fc46976-89n7v
     namespace: labs
-  zone: merit
+  zone: europe-west2-a
 - addresses:
-  - 10.6.7.31
+  - 10.4.5.36
   conditions:
     ready: true
     serving: true
     terminating: false
-  nodeName: worker-5.exp-1.merit.uw.systems
+  nodeName: worker-k8s-exp-1-hdrf.c.uw-dev.internal
   targetRef:
     kind: Pod
-    name: grpc-echo-server-cdc5f9557-tc44t
+    name: grpc-echo-server-7f9fc46976-2ndl5
     namespace: labs
-  zone: merit
-addressType: IPv4
+  zone: europe-west2-b
 ports:
 - name: grpc
   port: 50051
