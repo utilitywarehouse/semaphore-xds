@@ -48,6 +48,11 @@ spec:
             description: XdsServiceSpec defines the desired config for a service served
               via xDS
             properties:
+              allowRemoteEndpoints:
+                default: false
+                description: AllowRemoteEndpoints determines whether this Service
+                  should look for endpoints (EndpointSlices) in remote clusters.
+                type: boolean
               loadBalancing:
                 default:
                   policy: round_robin

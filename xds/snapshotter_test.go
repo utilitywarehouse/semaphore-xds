@@ -48,7 +48,7 @@ func TestSnapServices_SingleService(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN)
+	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false)
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 			Name:      "foo",
 			Namespace: "bar",
 		}}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN)
+	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false)
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN)
+	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false)
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {

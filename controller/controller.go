@@ -10,6 +10,7 @@ import (
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/pointer"
 
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
@@ -22,26 +23,30 @@ import (
 var LbPolicyLabel string
 
 type Controller struct {
-	client             kube.Client
-	snapshotter        *xds.Snapshotter
-	serviceQueue       *queue.Queue
-	serviceWatcher     *kube.ServiceWatcher
-	endpointSliceQueue *queue.Queue
-	crdQueue           *queue.Queue
+	localClient              kube.Client
+	remoteClients            []kube.Client
+	snapshotter              *xds.Snapshotter
+	serviceQueue             *queue.Queue
+	serviceWatcher           *kube.ServiceWatcher
+	localEndpointSliceQueue  *queue.Queue
+	remoteEndpointSliceQueue *queue.Queue
+	crdQueue                 *queue.Queue
 }
 
-func NewController(client kube.Client, namespace, labelselector string, s *xds.Snapshotter, resyncPeriod time.Duration) *Controller {
+func NewController(localClient kube.Client, remoteClients []kube.Client, namespace, labelselector string, s *xds.Snapshotter, resyncPeriod time.Duration) *Controller {
 	controller := &Controller{
-		client:      client,
-		snapshotter: s,
+		localClient:   localClient,
+		remoteClients: remoteClients,
+		snapshotter:   s,
 	}
 
 	controller.serviceQueue = queue.NewQueue("service", controller.reconcileServices)
-	controller.endpointSliceQueue = queue.NewQueue("endpointSlice", controller.reconcileEndpointSlices)
+	controller.localEndpointSliceQueue = queue.NewQueue("localEndpointSlice", controller.reconcileLocalEndpointSlice)
+	controller.remoteEndpointSliceQueue = queue.NewQueue("remoteEndpointSlice", controller.reconcileRemoteEndpointSlice)
 	controller.crdQueue = queue.NewQueue("crd", controller.reconcileServices)
 
 	// Legacy service watcher on label selector
-	controller.serviceWatcher = kube.NewServiceWatcher(client.KubeClient(), resyncPeriod, controller.serviceEventHandler, labelselector, namespace)
+	controller.serviceWatcher = kube.NewServiceWatcher(localClient.KubeClient(), resyncPeriod, controller.serviceEventHandler, labelselector, namespace)
 	controller.serviceWatcher.Init()
 
 	return controller
@@ -54,10 +59,14 @@ func (c *Controller) Run() error {
 	if ok := cache.WaitForNamedCacheSync("serviceWatcher", stopCh, c.serviceWatcher.HasSynced); !ok {
 		return fmt.Errorf("failed to wait for service caches to sync")
 	}
-	c.client.WatchAll(c.crdQueue, c.endpointSliceQueue, stopCh)
+	c.localClient.WatchAll(c.crdQueue, c.localEndpointSliceQueue, stopCh)
+	for _, client := range c.remoteClients {
+		client.WatchEndpointSlices(c.remoteEndpointSliceQueue, stopCh)
+	}
 
 	go c.serviceQueue.Run()
-	go c.endpointSliceQueue.Run()
+	go c.localEndpointSliceQueue.Run()
+	go c.remoteEndpointSliceQueue.Run()
 	go c.crdQueue.Run()
 
 	return nil
@@ -67,7 +76,8 @@ func (c *Controller) Stop() {
 	c.serviceWatcher.Stop()
 	c.serviceQueue.Stop()
 	c.crdQueue.Stop()
-	c.endpointSliceQueue.Stop()
+	c.localEndpointSliceQueue.Stop()
+	c.remoteEndpointSliceQueue.Stop()
 }
 
 // serviceEventHandler is the handler for the "legacy" service watcher
@@ -97,8 +107,8 @@ func (c *Controller) reconcileServices(name, namespace string) error {
 	return c.snapAll(svcs)
 }
 
-func (c *Controller) reconcileEndpointSlices(name, namespace string) error {
-	endpointSlice, err := c.client.EndpointSlice(name, namespace)
+func (c *Controller) reconcileLocalEndpointSlice(name, namespace string) error {
+	endpointSlice, err := c.localClient.EndpointSlice(name, namespace)
 	// If the EndpointSlice is not found assume it is deleted and refresh
 	// Endpoints snapshot to make sure it's up to date
 	if kubeerror.IsNotFound(err) {
@@ -108,8 +118,26 @@ func (c *Controller) reconcileEndpointSlices(name, namespace string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to get EndpointSlice: %s in namespace %s: %v", name, namespace, err)
 	}
-	// For any other update, check if the EndpointSlice belongs to a Service
-	// we expose and refresh snapshot if needed
+	return c.reconcileEndpointSlice(endpointSlice)
+}
+
+func (c *Controller) reconcileRemoteEndpointSlice(name, namespace string) error {
+	for _, client := range c.remoteClients {
+		endpointSlice, err := client.EndpointSlice(name, namespace)
+		if kubeerror.IsNotFound(err) {
+			continue
+		}
+		if err != nil { // If we error getting from a remote continue to the rest instead of requeuing
+			log.Logger.Error("Failed to get remote EndpointSlice", "name", name, "namespace", namespace, "error", err)
+			continue
+		}
+		return c.reconcileEndpointSlice(endpointSlice)
+	}
+	// EndpointSlice not found in remote clients - deleted
+	return c.snapEndpoints()
+}
+
+func (c *Controller) reconcileEndpointSlice(endpointSlice *discoveryv1.EndpointSlice) error {
 	svcs, err := c.servicesToXdsServiceStore()
 	if err != nil {
 		return err
@@ -156,20 +184,20 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 		return store, fmt.Errorf("Failed to list Services from watcher: %v", err)
 	}
 	for _, svc := range labelledServices {
-		store.AddOrUpdate(svc, extractClusterLbPolicyFromServiceLabel(svc))
+		store.AddOrUpdate(svc, extractClusterLbPolicyFromServiceLabel(svc), false)
 	}
-	xdsSvcs, err := c.client.XdsServiceList()
+	xdsSvcs, err := c.localClient.XdsServiceList()
 	if err != nil {
 		return store, fmt.Errorf("Failed to list XdsServices from watcher: %v", err)
 	}
 	for _, xdsSvc := range xdsSvcs {
-		svc, err := c.client.Service(xdsSvc.Spec.Service.Name, xdsSvc.Namespace)
+		svc, err := c.localClient.Service(xdsSvc.Spec.Service.Name, xdsSvc.Namespace)
 		if err != nil {
 			log.Logger.Warn("Service not found", "service", xdsSvc.Spec.Service.Name, "namespace", xdsSvc.Namespace, "error", err)
 			continue
 		}
 		policy := xds.ParseToClusterLbPolicy(xdsSvc.Spec.LoadBalancing.Policy)
-		store.AddOrUpdate(svc, policy)
+		store.AddOrUpdate(svc, policy, pointer.BoolPtrDerefOr(xdsSvc.Spec.AllowRemoteEndpoints, false))
 	}
 	return store, nil
 }
@@ -179,13 +207,27 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) (xds.XdsEndpointStore, error) {
 	store := xds.NewXdsEnpointStore()
 	for _, s := range svcs.All() {
-		es, err := c.client.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name))
+		// Add EndpointSlices from the local cluster
+		es, err := c.localClient.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name))
 		if err != nil {
 			return nil, err
 		}
 		for _, e := range es {
 			store.Add(s.Service.Name, s.Service.Namespace, e)
 		}
+		// Add EndpointSlices from remote clusters if allowed
+		if s.AllowRemoteEndpoints {
+			for _, client := range c.remoteClients {
+				es, err := client.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name))
+				if err != nil {
+					return nil, err
+				}
+				for _, e := range es {
+					store.Add(s.Service.Name, s.Service.Namespace, e)
+				}
+			}
+		}
+
 	}
 	return store, nil
 }
