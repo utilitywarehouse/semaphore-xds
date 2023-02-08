@@ -15,6 +15,7 @@ import (
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -204,11 +205,19 @@ func (c *clientWrapper) Service(name, namespace string) (*corev1.Service, error)
 
 // EndpointSlice returns the named EndpointSlice from the given namespace.
 func (c *clientWrapper) EndpointSlice(name, namespace string) (*discoveryv1.EndpointSlice, error) {
+	// Return a not found error if watcher is not initialised yet (for remote watchers)
+	if c.factoryKube == nil {
+		return &discoveryv1.EndpointSlice{}, kubeerror.NewNotFound(schema.GroupResource{Resource: "endpointslice"}, name)
+	}
 	return c.factoryKube.Discovery().V1().EndpointSlices().Lister().EndpointSlices(namespace).Get(name)
 }
 
 // EndpointSliceList returns all the EndpointSlices selected by a label
 func (c *clientWrapper) EndpointSliceList(labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
+	// Return an empty slice if watcher is not initialised yet (for remote watchers)
+	if c.factoryKube == nil {
+		return []*discoveryv1.EndpointSlice{}, nil
+	}
 	selector, err := labels.Parse(labelSelector)
 	if err != nil {
 		return []*discoveryv1.EndpointSlice{}, err
