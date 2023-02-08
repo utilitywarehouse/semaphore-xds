@@ -129,6 +129,7 @@ func (c *Controller) reconcileRemoteEndpointSlice(name, namespace string) error 
 	for _, client := range c.remoteClients {
 		endpointSlice, err := client.EndpointSlice(name, namespace)
 		if kubeerror.IsNotFound(err) {
+			log.Logger.Debug("EndpointSlice not found in remote cluster", "name", name, "namespace", namespace)
 			continue
 		}
 		if err != nil { // If we error getting from a remote continue to the rest instead of requeuing
