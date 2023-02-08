@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
+	"github.com/utilitywarehouse/semaphore-xds/backoff"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
 	"github.com/utilitywarehouse/semaphore-xds/queue"
@@ -61,7 +62,10 @@ func (c *Controller) Run() error {
 	}
 	c.localClient.WatchAll(c.crdQueue, c.localEndpointSliceQueue, stopCh)
 	for _, client := range c.remoteClients {
-		client.WatchEndpointSlices(c.remoteEndpointSliceQueue, stopCh)
+		// Do not block if a remote client is not able to start watching EndpointSlices, keep retrying
+		go func() {
+			backoff.RetryWatch(client.WatchEndpointSlices, c.remoteEndpointSliceQueue, stopCh, "watching remote EndpointSlices")
+		}()
 	}
 
 	go c.serviceQueue.Run()
