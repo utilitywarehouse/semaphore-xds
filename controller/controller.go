@@ -62,10 +62,8 @@ func (c *Controller) Run() error {
 	}
 	c.localClient.WatchAll(c.crdQueue, c.localEndpointSliceQueue, stopCh)
 	for _, client := range c.remoteClients {
-		// Do not block if a remote client is not able to start watching EndpointSlices, keep retrying
-		go func() {
-			backoff.RetryWatch(client.WatchEndpointSlices, c.remoteEndpointSliceQueue, stopCh, "watching remote EndpointSlices")
-		}()
+		// Do not block if a remote client is not able to start watching EndpointSlices
+		go backoff.RetryWatch(client.WatchEndpointSlices, c.remoteEndpointSliceQueue, stopCh, "watching remote EndpointSlices")
 	}
 
 	go c.serviceQueue.Run()
