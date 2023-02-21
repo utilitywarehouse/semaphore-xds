@@ -37,6 +37,7 @@ spec:
   loadBalancing:
     policy: <policy-name> # Optional. Defaults to round_robin
   allowRemoteEndpoints: false # Whether to look at remote clusters for service endpoints. Defaults to false
+  prioritizeLocalEndpoints: false # Whether to use higher priority for endpoints discovered in local cluster. Defaults to false
 ```
 
 Note that an XdsService can only point to a Service under the same namespace.
