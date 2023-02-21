@@ -29,9 +29,16 @@ type XdsServiceSpec struct {
 	AllowRemoteEndpoints *bool `json:"allowRemoteEndpoints,omitempty"`
 	// Service determines the Service resource to target
 	Service XdsServiceSpecService `json:"service"`
+	// LoadBalancing specidies the load balancer configuration to be passed
+	// to xDS clients.
 	// +kubebuilder:default={policy:round_robin}
 	// +optional
 	LoadBalancing XdsServiceSpecLoadBalancing `json:"loadBalancing,omitempty"`
+	// PrioritizeLocalEndpoints determines whether to give higher priority
+	// to endpoints that live in the local cluster
+	// +optional
+	//+kubebuilder:default=false
+	PrioritizeLocalEndpoints *bool `json:"prioritizeLocalEndpoints,omitempty"`
 }
 
 // +genclient
@@ -44,6 +51,8 @@ type XdsServiceSpec struct {
 // +kubebuilder:resource:shortName=xdssvc
 // +kubebuilder:printcolumn:name="Service",type=string,JSONPath=`.spec.service.name`
 // +kubebuilder:printcolumn:name="LbPolicy",type=string,JSONPath=`.spec.loadBalancing.policy`
+// +kubebuilder:printcolumn:name="AllowRemote",type=string,JSONPath=`.spec.allowRemoteEndpoints`
+// +kubebuilder:printcolumn:name="PrioritizeLocal",type=string,JSONPath=`.spec.prioritizeLocalEndpoints`
 type XdsService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -397,7 +397,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses from both local(2) and remote(2). 4 lbEndpoint addresses in
-	//total
+	// total. Also verify that all priorities are set to 0.
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -412,15 +412,19 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 		assert.Equal(t, 1, len(eds.Endpoints[0].LbEndpoints))
 		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.6.1.27", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[0].Priority)
 		assert.Equal(t, 1, len(eds.Endpoints[1].LbEndpoints))
 		lbEndpoint = eds.Endpoints[1].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.6.7.31", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[1].Priority)
 		assert.Equal(t, 1, len(eds.Endpoints[2].LbEndpoints))
 		lbEndpoint = eds.Endpoints[2].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.4.14.26", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[2].Priority)
 		assert.Equal(t, 1, len(eds.Endpoints[3].LbEndpoints))
 		lbEndpoint = eds.Endpoints[3].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.4.5.36", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[3].Priority)
 	}
 }
 
@@ -455,8 +459,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpointsAllowe
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
 	// Verify we will have 1 Endpoint resource in the snapshot containing
-	// only local client addresses  both local(2) and remote(2). 4 lbEndpoint addresses in
-	// sets allowRemoteEndpoints to false
+	// only local client addresses.
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -525,5 +528,122 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 		assert.Equal(t, 1, len(eds.Endpoints[1].LbEndpoints))
 		lbEndpoint = eds.Endpoints[1].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.4.5.36", lbEndpoint.Address.GetSocketAddress().Address)
+	}
+}
+
+func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *testing.T) {
+	localClient := kube.NewClientMock(
+		"./test-resources/xds_service_prioritize_local.yaml",
+		"./test-resources/endpointslice.yaml",
+	)
+	remoteClient := kube.NewClientMock(
+		"./test-resources/endpointslice-remote.yaml",
+	)
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort)
+	controller := NewController(
+		localClient,
+		[]kube.Client{remoteClient},
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+	// Reconciling any service should trigger a full snap, since this is only to be called on XdsService or labelled Service Updates
+	controller.reconcileServices("foo", "bar")
+	// Verify that our snapshot will have a single listener, route and
+	// cluster
+	snap, err := snapshotter.ServicesSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	// Verify we will have 1 Endpoint resource in the snapshot containing
+	// addresses for local endpoints with priority 0 and for remote ones
+	// with priority 1.
+	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.EndpointType)))
+	for _, res := range snap.GetResources(resource.EndpointType) {
+		eds, err := xds.UnmarshalResourceToEndpoint(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, 4, len(eds.Endpoints))
+		assert.Equal(t, 1, len(eds.Endpoints[0].LbEndpoints))
+		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.6.1.27", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[0].Priority)
+		assert.Equal(t, 1, len(eds.Endpoints[1].LbEndpoints))
+		lbEndpoint = eds.Endpoints[1].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.6.7.31", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[1].Priority)
+		assert.Equal(t, 1, len(eds.Endpoints[2].LbEndpoints))
+		lbEndpoint = eds.Endpoints[2].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.4.14.26", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(1), eds.Endpoints[2].Priority)
+		assert.Equal(t, 1, len(eds.Endpoints[3].LbEndpoints))
+		lbEndpoint = eds.Endpoints[3].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.4.5.36", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(1), eds.Endpoints[3].Priority)
+	}
+}
+
+func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *testing.T) {
+	localClient := kube.NewClientMock(
+		"./test-resources/xds_service_prioritize_local.yaml",
+	)
+	remoteClient := kube.NewClientMock(
+		"./test-resources/endpointslice-remote.yaml",
+	)
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort)
+	controller := NewController(
+		localClient,
+		[]kube.Client{remoteClient},
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+	// Reconciling any service should trigger a full snap, since this is only to be called on XdsService or labelled Service Updates
+	controller.reconcileServices("foo", "bar")
+	// Verify that our snapshot will have a single listener, route and
+	// cluster
+	snap, err := snapshotter.ServicesSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	// Verify we will have 1 Endpoint resource in the snapshot containing
+	// addresses for remote endpoints with priority 0, regardless of
+	// PrioritizeLocalEndpoints set to true.
+	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.EndpointType)))
+	for _, res := range snap.GetResources(resource.EndpointType) {
+		eds, err := xds.UnmarshalResourceToEndpoint(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, 2, len(eds.Endpoints))
+		assert.Equal(t, 1, len(eds.Endpoints[0].LbEndpoints))
+		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.4.14.26", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[0].Priority)
+		assert.Equal(t, 1, len(eds.Endpoints[1].LbEndpoints))
+		lbEndpoint = eds.Endpoints[1].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.4.5.36", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[1].Priority)
 	}
 }

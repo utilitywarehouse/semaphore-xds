@@ -44,7 +44,7 @@ func newSnapMetricsCollector(snapshotter *xds.Snapshotter) prometheus.Collector 
 		EndpointInfo: prometheus.NewDesc(
 			"semaphore_xds_snapshot_endpoint",
 			"Metadata about an xDS cluster load assignment endpoint",
-			[]string{"type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status"},
+			[]string{"type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status", "priority"},
 			nil,
 		),
 		RouteInfo: prometheus.NewDesc(
@@ -167,12 +167,13 @@ func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metr
 				healthStatus := xds.ParseLbEndpointHealthStatus(lbEndpoint.HealthStatus)
 				socketAddress := lbEndpoint.GetEndpoint().Address.GetSocketAddress()
 				address := fmt.Sprintf("%s:%s", socketAddress.GetAddress(), fmt.Sprint(socketAddress.GetPortValue()))
+				priority := fmt.Sprint(lbEndpoints.Priority)
 				ch <- prometheus.MustNewConstMetric(
 					c.EndpointInfo,
 					prometheus.GaugeValue,
 					1,
-					// "type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status"
-					resource.EndpointType, endpoint.ClusterName, lbEndpoints.GetLocality().Zone, lbEndpoints.GetLocality().SubZone, address, healthStatus,
+					// "type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status", "priority"
+					resource.EndpointType, endpoint.ClusterName, lbEndpoints.GetLocality().Zone, lbEndpoints.GetLocality().SubZone, address, healthStatus, priority,
 				)
 			}
 		}
