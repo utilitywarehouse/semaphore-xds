@@ -22,9 +22,10 @@ import (
 // xdsService holds the data we need to represent a Kubernetes Service in xds
 // configuration
 type xdsService struct {
-	AllowRemoteEndpoints bool
-	Policy               clusterv3.Cluster_LbPolicy
-	Service              *v1.Service
+	AllowRemoteEndpoints     bool
+	Policy                   clusterv3.Cluster_LbPolicy
+	PrioritizeLocalEndpoints bool
+	Service                  *v1.Service
 }
 
 // XdsServiceStore is a store of xdsService objects. It's meant It to be used
@@ -33,7 +34,7 @@ type xdsService struct {
 // should create new stores
 type XdsServiceStore interface {
 	All() map[string]xdsService
-	AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy, allowRemote bool)
+	AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy, allowRemote, localPriority bool)
 	Get(service, namespace string) (xdsService, error)
 	key(service, namespace string) string
 }
@@ -56,12 +57,13 @@ func (s *xdsServiceStoreWrapper) All() map[string]xdsService {
 }
 
 // AddOrUpdate adds or updates a Service in the store
-func (s *xdsServiceStoreWrapper) AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy, allowRemote bool) {
+func (s *xdsServiceStoreWrapper) AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy, allowRemote, localPriority bool) {
 	key := s.key(service.Name, service.Namespace)
 	s.store[key] = xdsService{
-		AllowRemoteEndpoints: allowRemote,
-		Policy:               policy,
-		Service:              service,
+		AllowRemoteEndpoints:     allowRemote,
+		Policy:                   policy,
+		PrioritizeLocalEndpoints: localPriority,
+		Service:                  service,
 	}
 }
 

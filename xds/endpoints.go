@@ -12,11 +12,17 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 )
 
+// priorityEndpointSlice is a Kubernetes EndpointSlices with a priority number
+type priorityEndpointsSlice struct {
+	endpointSlice *discoveryv1.EndpointSlice
+	priority      uint32
+}
+
 // xdsEndpoint groups Kubernetes EndpointSlices for each Service
 type xdsEndpoint struct {
-	service        string                       // the name of the Kubernetes Service that owns the EndpointSlices
-	namespace      string                       // the Kubernetes namespace which holds the resources
-	endpointSlices []*discoveryv1.EndpointSlice // the Kubernetes EndpointSlices to feed endpoints
+	endpointSlices []priorityEndpointsSlice // the Kubernetes EndpointSlices and the respective priorities to feed endpoints
+	namespace      string                   // the Kubernetes namespace which holds the resources
+	service        string                   // the name of the Kubernetes Service that owns the EndpointSlices
 }
 
 // XdsEndpointStore is a store of xdsEndpoint objects. It shall be used
@@ -25,7 +31,7 @@ type xdsEndpoint struct {
 // should create new stores
 type XdsEndpointStore interface {
 	All() map[string]xdsEndpoint
-	Add(service, namespace string, eps *discoveryv1.EndpointSlice)
+	Add(service, namespace string, eps *discoveryv1.EndpointSlice, priority uint32)
 	Get(service, namespace string) xdsEndpoint
 	key(service, namespace string) string
 }
@@ -48,16 +54,24 @@ func (s *xdsEndpointStoreWrapper) All() map[string]xdsEndpoint {
 }
 
 // Add adds an EndpointSlice to the store
-func (s *xdsEndpointStoreWrapper) Add(service, namespace string, eps *discoveryv1.EndpointSlice) {
+func (s *xdsEndpointStoreWrapper) Add(service, namespace string, eps *discoveryv1.EndpointSlice, priority uint32) {
 	key := s.key(service, namespace)
 	if se, ok := s.store[key]; !ok {
 		s.store[key] = xdsEndpoint{
-			service:        service,
-			namespace:      namespace,
-			endpointSlices: []*discoveryv1.EndpointSlice{eps},
+			endpointSlices: []priorityEndpointsSlice{
+				priorityEndpointsSlice{
+					endpointSlice: eps,
+					priority:      priority,
+				},
+			},
+			namespace: namespace,
+			service:   service,
 		}
 	} else {
-		se.endpointSlices = append(se.endpointSlices, eps)
+		se.endpointSlices = append(se.endpointSlices, priorityEndpointsSlice{
+			endpointSlice: eps,
+			priority:      priority,
+		})
 		s.store[key] = se
 	}
 }
@@ -108,12 +122,13 @@ func lbEndpoint(address string, port int32, healthy bool) *endpointv3.LbEndpoint
 // specify priorities and localities here. Probably this explains how load
 // balancing works:
 // https://github.com/grpc/grpc/blob/adfd009d3a255b825ea91959620c11805418b22b/src/core/ext/filters/client_channel/lb_policy/address_filtering.h#L31-L81
-func localityEndpoints(lbEndpoints []*endpointv3.LbEndpoint, zone, subzone string) *endpointv3.LocalityLbEndpoints {
+func localityEndpoints(lbEndpoints []*endpointv3.LbEndpoint, zone, subzone string, priority uint32) *endpointv3.LocalityLbEndpoints {
 	leps := &endpointv3.LocalityLbEndpoints{
 		Locality: &corev3.Locality{
 			Zone:    zone,
 			SubZone: subzone,
 		},
+		Priority:            priority,
 		LoadBalancingWeight: &wrapperspb.UInt32Value{Value: uint32(100)},
 		LbEndpoints:         lbEndpoints,
 	}
@@ -132,6 +147,7 @@ func clusterLoadAssignment(clusterName string, lEndpoints []*endpointv3.Locality
 type EdsClusterEndpoints struct {
 	addresses []string
 	port      int32
+	priority  uint32
 	zone      string
 	subzone   string
 	healthy   bool
@@ -147,13 +163,14 @@ type EdsClusters map[string]EdsCluster
 
 // endpointSliceToClusterEndpoints will represent Kubernetes Endpoints as
 // EdsClusterEndpoints structured vars to be used when rendering snapshots
-func endpointSliceToClusterEndpoints(e *discoveryv1.EndpointSlice) []EdsClusterEndpoints {
+func endpointSliceToClusterEndpoints(e *discoveryv1.EndpointSlice, priority uint32) []EdsClusterEndpoints {
 	ceps := []EdsClusterEndpoints{}
 	for _, p := range e.Ports {
 		for _, ep := range e.Endpoints {
 			ceps = append(ceps, EdsClusterEndpoints{
 				addresses: ep.Addresses,
 				port:      *p.Port,
+				priority:  priority,
 				zone:      *ep.Zone,
 				subzone:   ep.TargetRef.Name, // This should be the respective pod name, hacky way to have separate localities per endpoint.
 				healthy:   *ep.Conditions.Ready,
@@ -169,7 +186,7 @@ func createClustersFromEndpointStore(store XdsEndpointStore) EdsClusters {
 	clusters := make(EdsClusters)
 	for _, serviceEndpoint := range store.All() {
 		for _, e := range serviceEndpoint.endpointSlices {
-			for _, ce := range endpointSliceToClusterEndpoints(e) {
+			for _, ce := range endpointSliceToClusterEndpoints(e.endpointSlice, e.priority) {
 				clusterName := makeClusterName(serviceEndpoint.service, serviceEndpoint.namespace, ce.port)
 				if c, ok := clusters[clusterName]; !ok {
 					clusters[clusterName] = EdsCluster{
@@ -197,7 +214,7 @@ func endpointSlicesToClusterLoadAssignments(endpointStore XdsEndpointStore) ([]t
 			for _, a := range endpoint.addresses {
 				lbes = append(lbes, lbEndpoint(a, endpoint.port, endpoint.healthy))
 			}
-			localityEps = append(localityEps, localityEndpoints(lbes, endpoint.zone, endpoint.subzone))
+			localityEps = append(localityEps, localityEndpoints(lbes, endpoint.zone, endpoint.subzone, endpoint.priority))
 		}
 		eds = append(eds, clusterLoadAssignment(name, localityEps))
 	}

@@ -84,11 +84,11 @@ func TestSnapMetricsCollector(t *testing.T) {
 	)
 	serviceStore := xds.NewXdsServiceStore()
 	for _, s := range services {
-		serviceStore.AddOrUpdate(s, clusterv3.Cluster_ROUND_ROBIN, false)
+		serviceStore.AddOrUpdate(s, clusterv3.Cluster_ROUND_ROBIN, false, false)
 	}
 	endpointStore := xds.NewXdsEnpointStore()
 	for _, e := range endpointSlices {
-		endpointStore.Add("foo", "bar", e)
+		endpointStore.Add("foo", "bar", e, uint32(0))
 	}
 	tests := []struct {
 		name           string
@@ -113,9 +113,9 @@ func TestSnapMetricsCollector(t *testing.T) {
 					expectHttpsClusterName, expectHttpsDomains, expectHttpsRouteName, resource.RouteType, expectHttpsVhost),
 				fmt.Sprintf(`semaphore_xds_snapshot_cluster{discovery_type="eds",lb_policy="round_robin",name="%s",type="%s"} 1`, expectHttpClusterName, resource.ClusterType),
 				fmt.Sprintf(`semaphore_xds_snapshot_cluster{discovery_type="eds",lb_policy="round_robin",name="%s",type="%s"} 1`, expectHttpsClusterName, resource.ClusterType),
-				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",type="%s"} 1`,
+				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",priority="0",type="%s"} 1`,
 					expectHttpClusterName, "10.2.1.1:80", resource.EndpointType),
-				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",type="%s"} 1`,
+				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",priority="0",type="%s"} 1`,
 					expectHttpsClusterName, "10.2.1.1:443", resource.EndpointType),
 			},
 		},

@@ -48,7 +48,7 @@ func TestSnapServices_SingleService(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false)
+	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 			Name:      "foo",
 			Namespace: "bar",
 		}}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false)
+	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false)
+	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -135,7 +135,7 @@ func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
 			Namespace: "bar",
 		}}
 	endpointStore := NewXdsEnpointStore()
-	endpointStore.Add("foo", "bar", endpointSlice)
+	endpointStore.Add("foo", "bar", endpointSlice, uint32(0))
 	snapshotter.SnapEndpoints(endpointStore)
 	snap, err := snapshotter.endpointsCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -183,7 +183,7 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 		},
 	}
 	endpointStore := NewXdsEnpointStore()
-	endpointStore.Add("foo", "bar", endpointSlice)
+	endpointStore.Add("foo", "bar", endpointSlice, uint32(0))
 	snapshotter.SnapEndpoints(endpointStore)
 	snap, err := snapshotter.endpointsCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -201,11 +201,12 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 		assert.Equal(t, 1, len(eds.Endpoints[0].LbEndpoints))
 		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.2.1.1", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[0].Priority)
 	}
-	// Update address and check reflection on snapshot
+	// Update address and priority and check reflection on snapshot
 	endpointSlice.Endpoints[0].Addresses = []string{"10.2.2.2"}
 	endpointStore = NewXdsEnpointStore()
-	endpointStore.Add("foo", "bar", endpointSlice)
+	endpointStore.Add("foo", "bar", endpointSlice, uint32(1))
 	snapshotter.SnapEndpoints(endpointStore)
 	snap, err = snapshotter.endpointsCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -223,5 +224,6 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 		assert.Equal(t, 1, len(eds.Endpoints[0].LbEndpoints))
 		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
 		assert.Equal(t, "10.2.2.2", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(1), eds.Endpoints[0].Priority)
 	}
 }

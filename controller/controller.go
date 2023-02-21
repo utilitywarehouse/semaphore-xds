@@ -187,7 +187,7 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 		return store, fmt.Errorf("Failed to list Services from watcher: %v", err)
 	}
 	for _, svc := range labelledServices {
-		store.AddOrUpdate(svc, extractClusterLbPolicyFromServiceLabel(svc), false)
+		store.AddOrUpdate(svc, extractClusterLbPolicyFromServiceLabel(svc), false, false)
 	}
 	xdsSvcs, err := c.localClient.XdsServiceList()
 	if err != nil {
@@ -200,13 +200,20 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 			continue
 		}
 		policy := xds.ParseToClusterLbPolicy(xdsSvc.Spec.LoadBalancing.Policy)
-		store.AddOrUpdate(svc, policy, pointer.BoolPtrDerefOr(xdsSvc.Spec.AllowRemoteEndpoints, false))
+		store.AddOrUpdate(svc, policy, pointer.BoolPtrDerefOr(xdsSvc.Spec.AllowRemoteEndpoints, false), pointer.BoolPtrDerefOr(xdsSvc.Spec.PrioritizeLocalEndpoints, false))
 	}
 	return store, nil
 }
 
 // endpointSlicesForServiceMap calculates a ServiceEndpointStore from the
-// objects in the passed XdsServiceStore
+// objects in the passed XdsServiceStore. It also calculates priorities if
+// PrioritizeLocalEndpoints is set. Priorities should range from 0 (highest)
+// to N (lowest) without skipping, so we should always use 0 for the local
+// endpoints and 0 or 1 for remote endoints depending whether we want them as
+// equals or fallback targets. Under usual circumstances only endpoints with the
+// highest priority will be selected (unless all the highest targets are deemed
+// unreachable by the clients)
+// https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3#LocalityLbEndpoints
 func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) (xds.XdsEndpointStore, error) {
 	store := xds.NewXdsEnpointStore()
 	for _, s := range svcs.All() {
@@ -215,18 +222,24 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 		if err != nil {
 			return nil, err
 		}
+		foundLocalEndpoints := false
 		for _, e := range es {
-			store.Add(s.Service.Name, s.Service.Namespace, e)
+			store.Add(s.Service.Name, s.Service.Namespace, e, uint32(0)) // default 0 priority for all local endpoints
+			foundLocalEndpoints = true
 		}
 		// Add EndpointSlices from remote clusters if allowed
 		if s.AllowRemoteEndpoints {
+			priority := uint32(0)
+			if s.PrioritizeLocalEndpoints && foundLocalEndpoints {
+				priority = uint32(1)
+			}
 			for _, client := range c.remoteClients {
 				es, err := client.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name))
 				if err != nil {
 					return nil, err
 				}
 				for _, e := range es {
-					store.Add(s.Service.Name, s.Service.Namespace, e)
+					store.Add(s.Service.Name, s.Service.Namespace, e, priority)
 				}
 			}
 		}

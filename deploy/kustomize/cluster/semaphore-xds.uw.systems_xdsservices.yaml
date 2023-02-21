@@ -24,6 +24,12 @@ spec:
     - jsonPath: .spec.loadBalancing.policy
       name: LbPolicy
       type: string
+    - jsonPath: .spec.allowRemoteEndpoints
+      name: AllowRemote
+      type: string
+    - jsonPath: .spec.prioritizeLocalEndpoints
+      name: PrioritizeLocal
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -56,8 +62,8 @@ spec:
               loadBalancing:
                 default:
                   policy: round_robin
-                description: XdsServiceSpecLoadBalancing contains information regarding
-                  the Load Balancing policy
+                description: LoadBalancing specidies the load balancer configuration
+                  to be passed to xDS clients.
                 properties:
                   policy:
                     default: round_robin
@@ -65,6 +71,11 @@ spec:
                       be used
                     type: string
                 type: object
+              prioritizeLocalEndpoints:
+                default: false
+                description: PrioritizeLocalEndpoints determines whether to give higher
+                  priority to endpoints that live in the local cluster
+                type: boolean
               service:
                 description: Service determines the Service resource to target
                 properties:
