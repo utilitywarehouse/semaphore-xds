@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	endpointservice "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
@@ -122,8 +123,8 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 	return nil
 }
 
-func (s *Snapshotter) OnStreamClosed(id int64) {
-	log.Logger.Info("OnStreamClosed", "id", id)
+func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
+	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
@@ -152,7 +153,7 @@ func (s *Snapshotter) OnFetchRequest(ctx context.Context, req *discovery.Discove
 	return nil
 }
 
-func (s *Snapshotter) OnDeltaStreamClosed(id int64) {
+func (s *Snapshotter) OnDeltaStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnDeltaStreamClosed")
 }
 
