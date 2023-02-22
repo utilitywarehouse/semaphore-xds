@@ -647,3 +647,48 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 		assert.Equal(t, uint32(0), eds.Endpoints[1].Priority)
 	}
 }
+
+func TestReconcileLocalEndpointSlices_XdsServiceWithEmptyLocalEndpoints(t *testing.T) {
+	localClient := kube.NewClientMock(
+		"./test-resources/xds_service_prioritize_local.yaml",
+		"./test-resources/endpointslice-empty.yaml",
+	)
+	remoteClient := kube.NewClientMock(
+		"./test-resources/endpointslice-remote.yaml",
+	)
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort)
+	controller := NewController(
+		localClient,
+		[]kube.Client{remoteClient},
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+	// Reconciling any service should trigger a full snap, since this is only to be called on XdsService or labelled Service Updates
+	controller.reconcileLocalEndpointSlice("grpc-echo-server-8mwr4", "labs")
+	// Verify we will have 1 Endpoint resource in the snapshot containing
+	// addresses for remote endpoints with priority 0.
+	snap, err := snapshotter.EndpointsSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.EndpointType)))
+	for _, res := range snap.GetResources(resource.EndpointType) {
+		eds, err := xds.UnmarshalResourceToEndpoint(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, 2, len(eds.Endpoints))
+		assert.Equal(t, 1, len(eds.Endpoints[0].LbEndpoints))
+		lbEndpoint := eds.Endpoints[0].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.4.14.26", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[0].Priority)
+		assert.Equal(t, 1, len(eds.Endpoints[1].LbEndpoints))
+		lbEndpoint = eds.Endpoints[1].LbEndpoints[0].GetEndpoint()
+		assert.Equal(t, "10.4.5.36", lbEndpoint.Address.GetSocketAddress().Address)
+		assert.Equal(t, uint32(0), eds.Endpoints[1].Priority)
+	}
+}
