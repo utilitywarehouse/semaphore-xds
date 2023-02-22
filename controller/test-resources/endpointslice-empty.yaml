@@ -1,0 +1,17 @@
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  generateName: grpc-echo-server-
+  labels:
+    endpointslice.kubernetes.io/managed-by: endpointslice-controller.k8s.io
+    kubernetes.io/service-name: grpc-echo-server
+  name: grpc-echo-server-8mwr4
+  namespace: labs
+  ownerReferences:
+  - apiVersion: v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Service
+    name: grpc-echo-server
+ports: null

@@ -224,8 +224,10 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 		}
 		foundLocalEndpoints := false
 		for _, e := range es {
-			store.Add(s.Service.Name, s.Service.Namespace, e, uint32(0)) // default 0 priority for all local endpoints
-			foundLocalEndpoints = true
+			if e.Endpoints != nil && len(e.Endpoints) > 0 {
+				store.Add(s.Service.Name, s.Service.Namespace, e, uint32(0)) // default 0 priority for all local endpoints
+				foundLocalEndpoints = true
+			}
 		}
 		// Add EndpointSlices from remote clusters if allowed
 		if s.AllowRemoteEndpoints {
