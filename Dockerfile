@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine AS build
+FROM golang:1.20-alpine AS build
 WORKDIR /go/src/github.com/utilitywarehouse/semaphore-xds
 COPY . /go/src/github.com/utilitywarehouse/semaphore-xds
 ENV CGO_ENABLED=0
@@ -13,7 +13,7 @@ RUN \
     && cd ../client/ \
     && go build -ldflags='-s -w' -o /semaphore-xds-echo-client .
 
-FROM alpine:3.15
+FROM alpine:3.17
 COPY --from=build /semaphore-xds /semaphore-xds
 COPY --from=build /semaphore-xds-echo-server /semaphore-xds-echo-server
 COPY --from=build /semaphore-xds-echo-client /semaphore-xds-echo-client
