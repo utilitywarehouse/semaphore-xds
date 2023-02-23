@@ -15,6 +15,8 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/utilitywarehouse/semaphore-xds/log"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	xdsTypes "github.com/utilitywarehouse/semaphore-xds/types"
 )
 
 const (
@@ -187,19 +189,19 @@ func ParseLbEndpointHealthStatus(status corev3.HealthStatus) string {
 }
 
 // ParsePriorityStrategy parses priorityStrategy attribute
-func ParsePriorityStrategy(strategy string) string {
+func ParsePriorityStrategy(strategy xdsTypes.PolicyStrategy) xdsTypes.PolicyStrategy {
 	switch strategy {
-	case "none":
-		return strategy
-	case "local-first":
-		return strategy
+	case xdsTypes.NoPolicyStrategy:
+		return xdsTypes.NoPolicyStrategy
+	case xdsTypes.LocalFirstPolicyStrategy:
+		return xdsTypes.LocalFirstPolicyStrategy
 	default:
 		log.Logger.Info("Empty or unknown policy strategy, defaulting to none", "policyStrategy", strategy)
-		return "none"
+		return xdsTypes.NoPolicyStrategy
 	}
 }
 
 // PrioritizeLocal returns true if the strategy is set to local-first
-func PrioritizeLocal(strategy string) bool {
-	return strategy == "local-first"
+func PrioritizeLocal(strategy xdsTypes.PolicyStrategy) bool {
+	return strategy == xdsTypes.LocalFirstPolicyStrategy
 }

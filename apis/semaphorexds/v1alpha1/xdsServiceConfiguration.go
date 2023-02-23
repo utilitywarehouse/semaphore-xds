@@ -2,6 +2,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/utilitywarehouse/semaphore-xds/types"
 )
 
 // XdsServiceSpecService contains information regarding the Kubernetes Service
@@ -36,7 +38,8 @@ type XdsServiceSpec struct {
 	// priorities to endpoints. Possible values are `none` and `local-first`
 	// +optional
 	// +kubebuilder:default=none
-	PriorityStrategy string `json:"priorityStrategy,omitempty"`
+	// +kubebuilder:validation:Enum=none;local-first
+	PriorityStrategy types.PolicyStrategy `json:"priorityStrategy,omitempty"`
 	// Service determines the Service resource to target
 	Service XdsServiceSpecService `json:"service"`
 }

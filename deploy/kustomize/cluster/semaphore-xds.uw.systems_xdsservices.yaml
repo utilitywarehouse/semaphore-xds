@@ -76,6 +76,9 @@ spec:
                 description: PriorityStrategy determines the strategy to follow when
                   assigning priorities to endpoints. Possible values are `none` and
                   `local-first`
+                enum:
+                - none
+                - local-first
                 type: string
               service:
                 description: Service determines the Service resource to target
