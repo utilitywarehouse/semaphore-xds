@@ -22,13 +22,13 @@ spec:
       name: Service
       type: string
     - jsonPath: .spec.loadBalancing.policy
-      name: LbPolicy
+      name: Lb_Policy
       type: string
-    - jsonPath: .spec.allowRemoteEndpoints
-      name: AllowRemote
+    - jsonPath: .spec.enableRemoteEndpoints
+      name: Remote_Endpoints
       type: string
-    - jsonPath: .spec.prioritizeLocalEndpoints
-      name: PrioritizeLocal
+    - jsonPath: .spec.priorityStrategy
+      name: Priority_Strategy
       type: string
     name: v1alpha1
     schema:
@@ -54,9 +54,9 @@ spec:
             description: XdsServiceSpec defines the desired config for a service served
               via xDS
             properties:
-              allowRemoteEndpoints:
+              enableRemoteEndpoints:
                 default: false
-                description: AllowRemoteEndpoints determines whether this Service
+                description: EnableRemoteEndpoints determines whether this Service
                   should look for endpoints (EndpointSlices) in remote clusters.
                 type: boolean
               loadBalancing:
@@ -71,11 +71,12 @@ spec:
                       be used
                     type: string
                 type: object
-              prioritizeLocalEndpoints:
-                default: false
-                description: PrioritizeLocalEndpoints determines whether to give higher
-                  priority to endpoints that live in the local cluster
-                type: boolean
+              priorityStrategy:
+                default: none
+                description: PriorityStrategy determines the strategy to follow when
+                  assigning priorities to endpoints. Possible values are `none` and
+                  `local-first`
+                type: string
               service:
                 description: Service determines the Service resource to target
                 properties:

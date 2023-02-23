@@ -6,8 +6,7 @@ metadata:
 spec:
   service:
     name: grpc-echo-server
-  allowRemoteEndpoints: true
-  prioritizeLocalEndpoints: true
+  enableRemoteEndpoints: true
 ---
 apiVersion: v1
 kind: Service

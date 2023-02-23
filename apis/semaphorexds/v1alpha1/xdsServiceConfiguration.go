@@ -22,23 +22,23 @@ type XdsServiceSpecLoadBalancing struct {
 
 // XdsServiceSpec defines the desired config for a service served via xDS
 type XdsServiceSpec struct {
-	// AllowRemoteEndpoints determines whether this Service should look for
+	// EnableRemoteEndpoints determines whether this Service should look for
 	// endpoints (EndpointSlices) in remote clusters.
 	// +optional
 	// +kubebuilder:default=false
-	AllowRemoteEndpoints *bool `json:"allowRemoteEndpoints,omitempty"`
-	// Service determines the Service resource to target
-	Service XdsServiceSpecService `json:"service"`
+	EnableRemoteEndpoints *bool `json:"enableRemoteEndpoints,omitempty"`
 	// LoadBalancing specidies the load balancer configuration to be passed
 	// to xDS clients.
 	// +kubebuilder:default={policy:round_robin}
 	// +optional
 	LoadBalancing XdsServiceSpecLoadBalancing `json:"loadBalancing,omitempty"`
-	// PrioritizeLocalEndpoints determines whether to give higher priority
-	// to endpoints that live in the local cluster
+	// PriorityStrategy determines the strategy to follow when assigning
+	// priorities to endpoints. Possible values are `none` and `local-first`
 	// +optional
-	//+kubebuilder:default=false
-	PrioritizeLocalEndpoints *bool `json:"prioritizeLocalEndpoints,omitempty"`
+	// +kubebuilder:default=none
+	PriorityStrategy string `json:"priorityStrategy,omitempty"`
+	// Service determines the Service resource to target
+	Service XdsServiceSpecService `json:"service"`
 }
 
 // +genclient
@@ -50,9 +50,9 @@ type XdsServiceSpec struct {
 // traffic to GRPC endpoints.
 // +kubebuilder:resource:shortName=xdssvc
 // +kubebuilder:printcolumn:name="Service",type=string,JSONPath=`.spec.service.name`
-// +kubebuilder:printcolumn:name="LbPolicy",type=string,JSONPath=`.spec.loadBalancing.policy`
-// +kubebuilder:printcolumn:name="AllowRemote",type=string,JSONPath=`.spec.allowRemoteEndpoints`
-// +kubebuilder:printcolumn:name="PrioritizeLocal",type=string,JSONPath=`.spec.prioritizeLocalEndpoints`
+// +kubebuilder:printcolumn:name="Lb_Policy",type=string,JSONPath=`.spec.loadBalancing.policy`
+// +kubebuilder:printcolumn:name="Remote_Endpoints",type=string,JSONPath=`.spec.enableRemoteEndpoints`
+// +kubebuilder:printcolumn:name="Priority_Strategy",type=string,JSONPath=`.spec.priorityStrategy`
 type XdsService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

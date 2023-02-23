@@ -185,3 +185,21 @@ func ParseLbEndpointHealthStatus(status corev3.HealthStatus) string {
 		return ""
 	}
 }
+
+// ParsePriorityStrategy parses priorityStrategy attribute
+func ParsePriorityStrategy(strategy string) string {
+	switch strategy {
+	case "none":
+		return strategy
+	case "local-first":
+		return strategy
+	default:
+		log.Logger.Info("Empty or unknown policy strategy, defaulting to none", "policyStrategy", strategy)
+		return "none"
+	}
+}
+
+// PrioritizeLocal returns true if the strategy is set to local-first
+func PrioritizeLocal(strategy string) bool {
+	return strategy == "local-first"
+}

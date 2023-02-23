@@ -62,14 +62,14 @@ func TestXdsServiceStore_AddMany(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, "foo", foo.Service.Name)
-	assert.Equal(t, false, foo.AllowRemoteEndpoints)
+	assert.Equal(t, false, foo.EnableRemoteEndpoints)
 	assert.Equal(t, false, foo.PrioritizeLocalEndpoints)
 	other, err := serviceStore.Get("other", "bar")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, "other", other.Service.Name)
-	assert.Equal(t, true, other.AllowRemoteEndpoints)
+	assert.Equal(t, true, other.EnableRemoteEndpoints)
 	assert.Equal(t, true, other.PrioritizeLocalEndpoints)
 }
 
