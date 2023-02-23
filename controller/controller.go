@@ -200,19 +200,20 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 			continue
 		}
 		policy := xds.ParseToClusterLbPolicy(xdsSvc.Spec.LoadBalancing.Policy)
-		store.AddOrUpdate(svc, policy, pointer.BoolPtrDerefOr(xdsSvc.Spec.AllowRemoteEndpoints, false), pointer.BoolPtrDerefOr(xdsSvc.Spec.PrioritizeLocalEndpoints, false))
+		prioStrategy := xds.ParsePriorityStrategy(xdsSvc.Spec.PriorityStrategy)
+		store.AddOrUpdate(svc, policy, pointer.BoolPtrDerefOr(xdsSvc.Spec.EnableRemoteEndpoints, false), xds.PrioritizeLocal(prioStrategy))
 	}
 	return store, nil
 }
 
 // endpointSlicesForServiceMap calculates a ServiceEndpointStore from the
 // objects in the passed XdsServiceStore. It also calculates priorities if
-// PrioritizeLocalEndpoints is set. Priorities should range from 0 (highest)
-// to N (lowest) without skipping, so we should always use 0 for the local
-// endpoints and 0 or 1 for remote endoints depending whether we want them as
-// equals or fallback targets. Under usual circumstances only endpoints with the
-// highest priority will be selected (unless all the highest targets are deemed
-// unreachable by the clients)
+// PriorityStrategy is set to local-first. Priorities should range from 0
+// (highest) to N (lowest) without skipping, so we should always use 0 for the
+// local endpoints and 0 or 1 for remote endoints depending whether we want them
+// as equals or fallback targets. Under usual circumstances only endpoints with
+// the highest priority will be selected (unless all the highest targets are
+// deemed unreachable by the clients)
 // https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3#LocalityLbEndpoints
 func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) (xds.XdsEndpointStore, error) {
 	store := xds.NewXdsEnpointStore()
@@ -230,7 +231,7 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 			}
 		}
 		// Add EndpointSlices from remote clusters if allowed
-		if s.AllowRemoteEndpoints {
+		if s.EnableRemoteEndpoints {
 			priority := uint32(0)
 			if s.PrioritizeLocalEndpoints && foundLocalEndpoints {
 				priority = uint32(1)

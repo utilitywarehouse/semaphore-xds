@@ -367,7 +367,7 @@ func TestReconcileLocalEndpointSlice_NonXdsService(t *testing.T) {
 
 func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	localClient := kube.NewClientMock(
-		"./test-resources/xds_service_allowRemoteEndpoints.yaml",
+		"./test-resources/xds_service_enableRemoteEndpoints.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
 	remoteClient := kube.NewClientMock(
@@ -428,7 +428,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	}
 }
 
-func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpointsAllowed(t *testing.T) {
+func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpoints(t *testing.T) {
 	localClient := kube.NewClientMock(
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
@@ -482,7 +482,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpointsAllowe
 
 func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 	localClient := kube.NewClientMock(
-		"./test-resources/xds_service_allowRemoteEndpoints.yaml",
+		"./test-resources/xds_service_enableRemoteEndpoints.yaml",
 	)
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
@@ -533,7 +533,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 
 func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *testing.T) {
 	localClient := kube.NewClientMock(
-		"./test-resources/xds_service_prioritize_local.yaml",
+		"./test-resources/xds_service_priority_local_first.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
 	remoteClient := kube.NewClientMock(
@@ -596,7 +596,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *test
 
 func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *testing.T) {
 	localClient := kube.NewClientMock(
-		"./test-resources/xds_service_prioritize_local.yaml",
+		"./test-resources/xds_service_priority_local_first.yaml",
 	)
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
@@ -625,7 +625,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses for remote endpoints with priority 0, regardless of
-	// PrioritizeLocalEndpoints set to true.
+	// PriorityStrategy set to local-first.
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -650,7 +650,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 
 func TestReconcileLocalEndpointSlices_XdsServiceWithEmptyLocalEndpoints(t *testing.T) {
 	localClient := kube.NewClientMock(
-		"./test-resources/xds_service_prioritize_local.yaml",
+		"./test-resources/xds_service_priority_local_first.yaml",
 		"./test-resources/endpointslice-empty.yaml",
 	)
 	remoteClient := kube.NewClientMock(

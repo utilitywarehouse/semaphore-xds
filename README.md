@@ -36,11 +36,19 @@ spec:
     name: <service-name> # clients will access the service at: xds:///<service-name>.<namespace>:<port>
   loadBalancing:
     policy: <policy-name> # Optional. Defaults to round_robin
-  allowRemoteEndpoints: false # Whether to look at remote clusters for service endpoints. Defaults to false
-  prioritizeLocalEndpoints: false # Whether to use higher priority for endpoints discovered in local cluster. Defaults to false
+  enableRemoteEndpoints: false # Whether to look at remote clusters for service endpoints. Defaults to false
+  priorityStrategy: local-first # The strategy to use when assigning priorities to endpoints. Possible values are "none|local-first". Defaults to "none"
 ```
 
 Note that an XdsService can only point to a Service under the same namespace.
+
+Setting a priority strategy will only be meaningful when `enableRemoteEndpoints`
+is also set to true. One of the following strategies will be used to assign
+priority to endpoints:
+- none: All endpoints equally get the highest priority (0).
+- local-first: If there are both local and remote endpoints available, local
+  ones will be assigned the highest priority (0) while remotes will get the next
+  value (1).
 
 ### Configuration - Service labels (legacy - to be removed in the future)
 
