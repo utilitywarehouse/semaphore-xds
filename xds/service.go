@@ -87,6 +87,7 @@ func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfigura
 	routeName := makeRouteConfigName(name, namespace, port)
 	clusterName := makeClusterName(name, namespace, port)
 	virtualHostName := makeVirtualHostName(name, namespace, port)
+
 	return &routev3.RouteConfiguration{
 		Name: routeName,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -107,10 +108,16 @@ func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfigura
 						},
 					},
 				}},
+				// route retry policies take preference
+				// over these cluster retry policies
+				RetryPolicy: &routev3.RetryPolicy{
+					RetryOn:      ParseRetryOn(""),
+					NumRetries:   ParseNumRetries(""),
+					RetryBackOff: ParseRetryBackOff("", ""),
+				},
 			},
 		},
 	}
-
 }
 
 func makeManager(routeConfig *routev3.RouteConfiguration) (*anypb.Any, error) {
