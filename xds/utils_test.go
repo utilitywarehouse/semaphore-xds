@@ -10,11 +10,12 @@ import (
 
 func TestParseRetryOn(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		assert.Equal(t, "", xds.ParseRetryOn(""))
+		assert.Equal(t, "", xds.ParseRetryOn([]string{}))
+		assert.Equal(t, "", xds.ParseRetryOn([]string{""}))
 	})
 
 	t.Run("single invalid", func(t *testing.T) {
-		assert.Equal(t, "", xds.ParseRetryOn("some-value"))
+		assert.Equal(t, "", xds.ParseRetryOn([]string{"some-value"}))
 	})
 
 	t.Run("single valid", func(t *testing.T) {
@@ -27,12 +28,18 @@ func TestParseRetryOn(t *testing.T) {
 		}
 
 		for _, v := range valid {
-			assert.Equal(t, v, xds.ParseRetryOn(v))
+			assert.Equal(t, v, xds.ParseRetryOn([]string{v}))
 		}
 	})
 
 	t.Run("mixed valid", func(t *testing.T) {
-		assert.Equal(t, "internal,cancelled,unavailable", xds.ParseRetryOn("some,internal,  eggs,cancelled, unavailable"))
+		assert.Equal(t, "internal,cancelled,unavailable", xds.ParseRetryOn([]string{
+			"some",
+			"internal",
+			"  eggs",
+			"cancelled",
+			" unavailable",
+		}))
 	})
 }
 

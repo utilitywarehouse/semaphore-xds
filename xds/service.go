@@ -111,7 +111,7 @@ func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfigura
 				// route retry policies take preference
 				// over these cluster retry policies
 				RetryPolicy: &routev3.RetryPolicy{
-					RetryOn:      ParseRetryOn(""),
+					RetryOn:      ParseRetryOn([]string{}),
 					NumRetries:   ParseNumRetries(""),
 					RetryBackOff: ParseRetryBackOff("", ""),
 				},

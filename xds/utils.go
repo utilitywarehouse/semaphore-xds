@@ -214,12 +214,11 @@ func PrioritizeLocal(strategy xdsTypes.PolicyStrategy) bool {
 // ParseRetryOn validates the retry_on value and returns it if valid.
 // Currently only support gRPC's subset of Envoy's `retry_on` values.
 // Multiple values supported as a comma separated list.
-func ParseRetryOn(on string) string {
-	valid := make([]string, 0, 5)
-	for _, s := range strings.Split(on, ",") {
-		// gRPCs `retry_on` only supports a subset of Envoy's `retry_on` values
-		// https://github.com/grpc/grpc-go/blob/3775f633ce208a524fd882c9b4678b95b8a5a4d4/xds/internal/xdsclient/xdsresource/unmarshal_rds.go#L157
-		s = strings.TrimSpace(strings.ToLower(s))
+func ParseRetryOn(on []string) string {
+	valid := make([]string, 0, len(on))
+
+	for _, o := range on {
+		s := strings.TrimSpace(strings.ToLower(o))
 		switch s {
 		case "cancelled",
 			"deadline-exceeded",
@@ -229,6 +228,7 @@ func ParseRetryOn(on string) string {
 			valid = append(valid, s)
 		}
 	}
+
 	return strings.Join(valid, ",")
 }
 
