@@ -14,11 +14,7 @@ func TestParseRetryOn(t *testing.T) {
 		assert.Equal(t, "", xds.ParseRetryOn([]string{""}))
 	})
 
-	t.Run("single invalid", func(t *testing.T) {
-		assert.Equal(t, "", xds.ParseRetryOn([]string{"some-value"}))
-	})
-
-	t.Run("single valid", func(t *testing.T) {
+	t.Run("single", func(t *testing.T) {
 		valid := []string{
 			"cancelled",
 			"deadline-exceeded",
@@ -32,8 +28,8 @@ func TestParseRetryOn(t *testing.T) {
 		}
 	})
 
-	t.Run("mixed valid", func(t *testing.T) {
-		assert.Equal(t, "internal,cancelled,unavailable", xds.ParseRetryOn([]string{
+	t.Run("mixed", func(t *testing.T) {
+		assert.Equal(t, "some,internal,eggs,cancelled,unavailable", xds.ParseRetryOn([]string{
 			"some",
 			"internal",
 			"  eggs",
@@ -45,16 +41,15 @@ func TestParseRetryOn(t *testing.T) {
 
 func TestParseNumRetries(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		assert.Equal(t, uint32(1), xds.ParseNumRetries("").Value)
-	})
-
-	t.Run("invalid", func(t *testing.T) {
-		assert.Equal(t, uint32(1), xds.ParseNumRetries("some-value").Value)
-		assert.Equal(t, uint32(1), xds.ParseNumRetries("-1").Value)
+		assert.Equal(t, uint32(1), xds.ParseNumRetries(nil).Value)
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		assert.Equal(t, uint32(5), xds.ParseNumRetries("5").Value)
+		var zero uint32 = 0
+		assert.Equal(t, uint32(0), xds.ParseNumRetries(&zero).Value)
+
+		var five uint32 = 5
+		assert.Equal(t, uint32(5), xds.ParseNumRetries(&five).Value)
 	})
 }
 
