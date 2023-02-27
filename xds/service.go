@@ -19,13 +19,14 @@ import (
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
-// xdsService holds the data we need to represent a Kubernetes Service in xds
+// Service holds the data we need to represent a Kubernetes Service in xds
 // configuration
-type xdsService struct {
+type Service struct {
 	EnableRemoteEndpoints    bool
 	Policy                   clusterv3.Cluster_LbPolicy
 	PrioritizeLocalEndpoints bool
 	Service                  *v1.Service
+	Retry                    *routev3.RetryPolicy
 }
 
 // XdsServiceStore is a store of xdsService objects. It's meant It to be used
@@ -33,46 +34,42 @@ type xdsService struct {
 // so only add and get functions should be implemented. For new snapshots we
 // should create new stores
 type XdsServiceStore interface {
-	All() map[string]xdsService
-	AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy, enableRemote, localPriority bool)
-	Get(service, namespace string) (xdsService, error)
+	All() map[string]Service
+	AddOrUpdate(service *v1.Service, xdsService Service)
+	Get(service, namespace string) (Service, error)
 	key(service, namespace string) string
 }
 
 // xdsServiceStoreWrapper wraps the store interface and holds the store map
 type xdsServiceStoreWrapper struct {
-	store map[string]xdsService
+	store map[string]Service
 }
 
 // NewXdsServiceStore return a new ServiceEndpointStore
 func NewXdsServiceStore() *xdsServiceStoreWrapper {
 	return &xdsServiceStoreWrapper{
-		store: make(map[string]xdsService),
+		store: make(map[string]Service),
 	}
 }
 
 // All returns everything in the store
-func (s *xdsServiceStoreWrapper) All() map[string]xdsService {
+func (s *xdsServiceStoreWrapper) All() map[string]Service {
 	return s.store
 }
 
 // AddOrUpdate adds or updates a Service in the store
-func (s *xdsServiceStoreWrapper) AddOrUpdate(service *v1.Service, policy clusterv3.Cluster_LbPolicy, enableRemote, localPriority bool) {
+func (s *xdsServiceStoreWrapper) AddOrUpdate(service *v1.Service, xdsService Service) {
 	key := s.key(service.Name, service.Namespace)
-	s.store[key] = xdsService{
-		EnableRemoteEndpoints:    enableRemote,
-		Policy:                   policy,
-		PrioritizeLocalEndpoints: localPriority,
-		Service:                  service,
-	}
+	xdsService.Service = service
+	s.store[key] = xdsService
 }
 
 // Get returns the stored xdsService for the respective Service name and
 // namespace
-func (s *xdsServiceStoreWrapper) Get(service, namespace string) (xdsService, error) {
+func (s *xdsServiceStoreWrapper) Get(service, namespace string) (Service, error) {
 	key := s.key(service, namespace)
 	if svc, ok := s.store[key]; !ok {
-		return xdsService{}, fmt.Errorf("Service not found in store")
+		return Service{}, fmt.Errorf("Service not found in store")
 	} else {
 		return svc, nil
 	}
@@ -83,19 +80,10 @@ func (s *xdsServiceStoreWrapper) key(service, namespace string) string {
 	return fmt.Sprintf("%s.%s", service, namespace)
 }
 
-func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfiguration {
+func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPolicy) *routev3.RouteConfiguration {
 	routeName := makeRouteConfigName(name, namespace, port)
 	clusterName := makeClusterName(name, namespace, port)
 	virtualHostName := makeVirtualHostName(name, namespace, port)
-
-	var retryPolicy *routev3.RetryPolicy
-	if true { // TODO: pass config in
-		retryPolicy = &routev3.RetryPolicy{
-			RetryOn:      ParseRetryOn([]string{}),
-			NumRetries:   ParseNumRetries(nil),
-			RetryBackOff: ParseRetryBackOff("", ""),
-		}
-	}
 
 	return &routev3.RouteConfiguration{
 		Name: routeName,
@@ -117,9 +105,7 @@ func makeRouteConfig(name, namespace string, port int32) *routev3.RouteConfigura
 						},
 					},
 				}},
-				// route retry policies take preference
-				// over these cluster retry policies
-				RetryPolicy: retryPolicy,
+				RetryPolicy: retry,
 			},
 		},
 	}
@@ -175,7 +161,7 @@ func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []type
 	var lsnr []types.Resource
 	for _, s := range serviceStore.All() {
 		for _, port := range s.Service.Spec.Ports {
-			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port)
+			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port, s.Retry)
 			rds = append(rds, routeConfig)
 			manager, err := makeManager(routeConfig)
 			if err != nil {

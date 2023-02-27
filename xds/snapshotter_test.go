@@ -48,7 +48,11 @@ func TestSnapServices_SingleService(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -69,7 +73,11 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 			Name:      "foo",
 			Namespace: "bar",
 		}}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {
@@ -91,17 +99,21 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
-				v1.ServicePort{
+				{
 					Name: "http",
 					Port: int32(80),
 				},
-				v1.ServicePort{
+				{
 					Name: "https",
 					Port: int32(443),
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
 	if err != nil {

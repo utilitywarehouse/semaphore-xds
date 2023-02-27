@@ -84,7 +84,11 @@ func TestSnapMetricsCollector(t *testing.T) {
 	)
 	serviceStore := xds.NewXdsServiceStore()
 	for _, s := range services {
-		serviceStore.AddOrUpdate(s, clusterv3.Cluster_ROUND_ROBIN, false, false)
+		serviceStore.AddOrUpdate(s, xds.Service{
+			Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+			EnableRemoteEndpoints:    false,
+			PrioritizeLocalEndpoints: false,
+		})
 	}
 	endpointStore := xds.NewXdsEnpointStore()
 	for _, e := range endpointSlices {
