@@ -29,7 +29,11 @@ func TestXdsServiceStore_AddNew(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	assert.Equal(t, 1, len(serviceStore.All()))
 }
 
@@ -48,14 +52,22 @@ func TestXdsServiceStore_AddMany(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svcF, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svcF, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	svcO := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "other",
 			Namespace: "bar",
 		},
 	}
-	serviceStore.AddOrUpdate(svcO, clusterv3.Cluster_ROUND_ROBIN, true, true)
+	serviceStore.AddOrUpdate(svcO, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    true,
+		PrioritizeLocalEndpoints: true,
+	})
 	assert.Equal(t, 2, len(serviceStore.All()))
 	foo, err := serviceStore.Get("foo", "bar")
 	if err != nil {
@@ -88,10 +100,18 @@ func TestXdsServiceStore_AddTheSame(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	assert.Equal(t, 1, len(serviceStore.All()))
 	// Re-add the same service
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	assert.Equal(t, 1, len(serviceStore.All()))
 }
 
@@ -110,7 +130,11 @@ func TestXdsServiceStore_Update(t *testing.T) {
 				}},
 		},
 	}
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_ROUND_ROBIN, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	assert.Equal(t, 1, len(serviceStore.All()))
 	s, err := serviceStore.Get("foo", "bar")
 	if err != nil {
@@ -120,7 +144,11 @@ func TestXdsServiceStore_Update(t *testing.T) {
 	assert.Equal(t, clusterv3.Cluster_ROUND_ROBIN, s.Policy)
 	// Change port value and lb policy and update
 	svc.Spec.Ports[0].Port = int32(81)
-	serviceStore.AddOrUpdate(svc, clusterv3.Cluster_RING_HASH, false, false)
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_RING_HASH,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
 	assert.Equal(t, 1, len(serviceStore.All()))
 	s, err = serviceStore.Get("foo", "bar")
 	if err != nil {

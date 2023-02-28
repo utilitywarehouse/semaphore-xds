@@ -5,6 +5,7 @@ import (
 	"time"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
@@ -12,6 +13,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
+	"github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/backoff"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
@@ -187,7 +189,11 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 		return store, fmt.Errorf("Failed to list Services from watcher: %v", err)
 	}
 	for _, svc := range labelledServices {
-		store.AddOrUpdate(svc, extractClusterLbPolicyFromServiceLabel(svc), false, false)
+		store.AddOrUpdate(svc, xds.Service{
+			Policy:                   extractClusterLbPolicyFromServiceLabel(svc),
+			EnableRemoteEndpoints:    false,
+			PrioritizeLocalEndpoints: false,
+		})
 	}
 	xdsSvcs, err := c.localClient.XdsServiceList()
 	if err != nil {
@@ -201,8 +207,16 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 		}
 		policy := xds.ParseToClusterLbPolicy(xdsSvc.Spec.LoadBalancing.Policy)
 		prioStrategy := xds.ParsePriorityStrategy(xdsSvc.Spec.PriorityStrategy)
-		store.AddOrUpdate(svc, policy, pointer.BoolPtrDerefOr(xdsSvc.Spec.EnableRemoteEndpoints, false), xds.PrioritizeLocal(prioStrategy))
+		retryPolicy := extractRetryPolicy(xdsSvc.Spec.Retry)
+
+		store.AddOrUpdate(svc, xds.Service{
+			EnableRemoteEndpoints:    pointer.BoolDeref(xdsSvc.Spec.EnableRemoteEndpoints, false),
+			Policy:                   policy,
+			PrioritizeLocalEndpoints: xds.PrioritizeLocal(prioStrategy),
+			Retry:                    retryPolicy,
+		})
 	}
+
 	return store, nil
 }
 
@@ -251,11 +265,6 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 	return store, nil
 }
 
-// serviceKey concatenates a name and a namespace into a single string
-func serviceKey(name, namespace string) string {
-	return fmt.Sprintf("%s.%s", name, namespace)
-}
-
 // needToReconcileEndpointSlice returns true if we need to reconcile an
 // EndpointSlice
 func needToReconcileEndpointSlice(endpointSlice *discoveryv1.EndpointSlice, store xds.XdsServiceStore) bool {
@@ -270,10 +279,7 @@ func needToReconcileEndpointSlice(endpointSlice *discoveryv1.EndpointSlice, stor
 
 func isServiceInXdsServiceStore(name, namespace string, store xds.XdsServiceStore) bool {
 	_, err := store.Get(name, namespace)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func extractClusterLbPolicyFromServiceLabel(service *v1.Service) clusterv3.Cluster_LbPolicy {
@@ -283,4 +289,18 @@ func extractClusterLbPolicyFromServiceLabel(service *v1.Service) clusterv3.Clust
 		return clusterv3.Cluster_ROUND_ROBIN
 	}
 	return xds.ParseToClusterLbPolicy(lbPolicyRaw)
+}
+
+func extractRetryPolicy(policy *v1alpha1.XdsServiceSpecRetry) *routev3.RetryPolicy {
+	if policy == nil {
+		return nil
+	}
+	if len(policy.On) == 0 {
+		return nil
+	}
+	return &routev3.RetryPolicy{
+		RetryOn:      xds.ParseRetryOn(policy.On),
+		NumRetries:   xds.ParseNumRetries(policy.NumRetries),
+		RetryBackOff: xds.ParseRetryBackOff(policy.RetryBackOff.BaseInterval, policy.RetryBackOff.MaxInterval),
+	}
 }

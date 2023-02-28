@@ -30,6 +30,9 @@ spec:
     - jsonPath: .spec.priorityStrategy
       name: Priority_Strategy
       type: string
+    - jsonPath: .spec.retry.on
+      name: Retry_On
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -80,6 +83,39 @@ spec:
                 - none
                 - local-first
                 type: string
+              retry:
+                description: Retry specifies the retry policy for the service.
+                properties:
+                  backoff:
+                    default:
+                      baseInterval: 25ms
+                      maxInterval: 250ms
+                    description: Specifies parameters that control exponential retry
+                      back off.
+                    properties:
+                      baseInterval:
+                        default: 25ms
+                        description: Specifies the base interval between retries.
+                        type: string
+                      maxInterval:
+                        default: 250ms
+                        description: Specifies the maximum interval between retries.
+                        type: string
+                    type: object
+                  numRetries:
+                    default: 1
+                    description: Number of retries that will be attempted.
+                    format: int32
+                    type: integer
+                  "on":
+                    default: none
+                    description: Specifies the conditions under which retry takes
+                      place. By default this is empty, which means retries are disabled.
+                    items:
+                      type: string
+                    type: array
+                    uniqueItems: true
+                type: object
               service:
                 description: Service determines the Service resource to target
                 properties:

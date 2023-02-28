@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
+	"time"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -13,8 +15,10 @@ import (
 	managerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/utilitywarehouse/semaphore-xds/log"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	xdsTypes "github.com/utilitywarehouse/semaphore-xds/types"
 )
@@ -29,7 +33,8 @@ func makeClusterName(name, namespace string, port int32) string {
 }
 
 // This is a bit confusing but it seems simpler to name the listener, route and
-//  virtual host as the service domain we expect to hit from the client.
+//
+//	virtual host as the service domain we expect to hit from the client.
 func makeListenerName(name, namespace string, port int32) string {
 	return makeGlobalServiceDomain(name, namespace, port)
 }
@@ -204,4 +209,47 @@ func ParsePriorityStrategy(strategy xdsTypes.PolicyStrategy) xdsTypes.PolicyStra
 // PrioritizeLocal returns true if the strategy is set to local-first
 func PrioritizeLocal(strategy xdsTypes.PolicyStrategy) bool {
 	return strategy == xdsTypes.LocalFirstPolicyStrategy
+}
+
+// ParseRetryOn validates the retry_on value and returns it if valid.
+//
+// Currently only support gRPC's subset of Envoy's `retry_on` values:
+// https://github.com/grpc/grpc-go/blob/3775f633ce208a524fd882c9b4678b95b8a5a4d4/xds/internal/xdsclient/xdsresource/unmarshal_rds.go#L165-L173
+func ParseRetryOn(on []string) string {
+	valid := make([]string, 0, len(on))
+	for _, s := range on {
+		valid = append(valid, strings.TrimSpace(strings.ToLower(s)))
+	}
+	return strings.Join(valid, ",")
+}
+
+// ParseNumRetries parses the number of retries.
+// Failing to parse the number will default to 1 retry.
+func ParseNumRetries(num *uint32) *wrappers.UInt32Value {
+	if num == nil {
+		return &wrappers.UInt32Value{Value: 1}
+	}
+	return &wrappers.UInt32Value{Value: *num}
+}
+
+// ParseRetryBackOff parses the retry backoff values.
+// Default base is 25ms and the default max is 10x the base.
+func ParseRetryBackOff(base, max string) *routev3.RetryPolicy_RetryBackOff {
+	baseDuration, err := time.ParseDuration(base)
+	if err != nil {
+		baseDuration = 25 * time.Millisecond
+	}
+
+	maxDuration, err := time.ParseDuration(max)
+	if err != nil {
+		maxDuration = 10 * baseDuration
+	}
+	if maxDuration < baseDuration {
+		maxDuration = baseDuration
+	}
+
+	return &routev3.RetryPolicy_RetryBackOff{
+		BaseInterval: durationpb.New(baseDuration),
+		MaxInterval:  durationpb.New(maxDuration),
+	}
 }

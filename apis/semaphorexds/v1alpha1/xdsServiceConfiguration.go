@@ -22,6 +22,36 @@ type XdsServiceSpecLoadBalancing struct {
 	Policy string `json:"policy,omitempty"`
 }
 
+// XdsServiceSpecRetryBackoffPolicy defines the exponential backoff policy for a service.
+type XdsServiceSpecRetryBackoffPolicy struct {
+	// Specifies the base interval between retries.
+	// +optional
+	// +kubebuilder:default="25ms"
+	BaseInterval string `json:"baseInterval,omitempty"`
+	// Specifies the maximum interval between retries.
+	// +optional
+	// +kubebuilder:default="250ms"
+	MaxInterval string `json:"maxInterval,omitempty"`
+}
+
+// XdsServiceSpecRetry defines the retry policy for a service.
+type XdsServiceSpecRetry struct {
+	// Specifies the conditions under which retry takes place.
+	// By default this is empty, which means retries are disabled.
+	// +optional
+	// +kubebuilder:default=none
+	// +kubebuilder:validation:UniqueItems=true
+	On []string `json:"on,omitempty"`
+	// Number of retries that will be attempted.
+	// +optional
+	// +kubebuilder:default=1
+	NumRetries *uint32 `json:"numRetries,omitempty"`
+	// Specifies parameters that control exponential retry back off.
+	// +optional
+	// +kubebuilder:default={baseInterval:"25ms",maxInterval:"250ms"}
+	RetryBackOff XdsServiceSpecRetryBackoffPolicy `json:"backoff,omitempty"`
+}
+
 // XdsServiceSpec defines the desired config for a service served via xDS
 type XdsServiceSpec struct {
 	// EnableRemoteEndpoints determines whether this Service should look for
@@ -40,6 +70,9 @@ type XdsServiceSpec struct {
 	// +kubebuilder:default=none
 	// +kubebuilder:validation:Enum=none;local-first
 	PriorityStrategy types.PolicyStrategy `json:"priorityStrategy,omitempty"`
+	// Retry specifies the retry policy for the service.
+	// +optional
+	Retry *XdsServiceSpecRetry `json:"retry,omitempty"`
 	// Service determines the Service resource to target
 	Service XdsServiceSpecService `json:"service"`
 }
@@ -56,6 +89,7 @@ type XdsServiceSpec struct {
 // +kubebuilder:printcolumn:name="Lb_Policy",type=string,JSONPath=`.spec.loadBalancing.policy`
 // +kubebuilder:printcolumn:name="Remote_Endpoints",type=string,JSONPath=`.spec.enableRemoteEndpoints`
 // +kubebuilder:printcolumn:name="Priority_Strategy",type=string,JSONPath=`.spec.priorityStrategy`
+// +kubebuilder:printcolumn:name="Retry_On",type=string,JSONPath=`.spec.retry.on`
 type XdsService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
