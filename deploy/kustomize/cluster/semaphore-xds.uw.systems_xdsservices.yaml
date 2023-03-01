@@ -30,7 +30,7 @@ spec:
     - jsonPath: .spec.priorityStrategy
       name: Priority_Strategy
       type: string
-    - jsonPath: .spec.retry.on
+    - jsonPath: .spec.retry.retryOn
       name: Retry_On
       type: string
     name: v1alpha1
@@ -107,14 +107,12 @@ spec:
                     description: Number of retries that will be attempted.
                     format: int32
                     type: integer
-                  "on":
-                    default: none
+                  retryOn:
                     description: Specifies the conditions under which retry takes
                       place. By default this is empty, which means retries are disabled.
                     items:
                       type: string
                     type: array
-                    uniqueItems: true
                 type: object
               service:
                 description: Service determines the Service resource to target

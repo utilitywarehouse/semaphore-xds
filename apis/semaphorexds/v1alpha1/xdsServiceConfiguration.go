@@ -39,9 +39,7 @@ type XdsServiceSpecRetry struct {
 	// Specifies the conditions under which retry takes place.
 	// By default this is empty, which means retries are disabled.
 	// +optional
-	// +kubebuilder:default=none
-	// +kubebuilder:validation:UniqueItems=true
-	On []string `json:"on,omitempty"`
+	RetryOn []string `json:"retryOn,omitempty"`
 	// Number of retries that will be attempted.
 	// +optional
 	// +kubebuilder:default=1
@@ -89,7 +87,7 @@ type XdsServiceSpec struct {
 // +kubebuilder:printcolumn:name="Lb_Policy",type=string,JSONPath=`.spec.loadBalancing.policy`
 // +kubebuilder:printcolumn:name="Remote_Endpoints",type=string,JSONPath=`.spec.enableRemoteEndpoints`
 // +kubebuilder:printcolumn:name="Priority_Strategy",type=string,JSONPath=`.spec.priorityStrategy`
-// +kubebuilder:printcolumn:name="Retry_On",type=string,JSONPath=`.spec.retry.on`
+// +kubebuilder:printcolumn:name="Retry_On",type=string,JSONPath=`.spec.retry.retryOn`
 type XdsService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
