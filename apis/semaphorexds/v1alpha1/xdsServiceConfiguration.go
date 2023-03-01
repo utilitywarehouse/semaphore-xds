@@ -39,8 +39,6 @@ type XdsServiceSpecRetry struct {
 	// Specifies the conditions under which retry takes place.
 	// By default this is empty, which means retries are disabled.
 	// +optional
-	// +kubebuilder:default=none
-	// +kubebuilder:validation:UniqueItems=true
 	RetryOn []string `json:"retryOn,omitempty"`
 	// Number of retries that will be attempted.
 	// +optional
