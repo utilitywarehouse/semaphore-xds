@@ -76,7 +76,7 @@ default to round robin.
 
 ### Retry policy
 
-`retryOn` must be set with at least one value in order for the rest of the policy to be served, else it will be ignored.
+`retryOn` must be set with at least one value in order for the rest of the policy to be served, else the whole policy will be ignored.
 We are typically using xDS with Go gRPC services, which as of writing only [certain values](https://github.com/grpc/grpc-go/blob/3775f633ce208a524fd882c9b4678b95b8a5a4d4/xds/internal/xdsclient/xdsresource/unmarshal_rds.go#L165-L173) are supported.
 
 `backoff` configures the exponential backoff parameters. This is optional, in which case the default value of 25ms for base interval is used along with 10 times the base for the max interval.
