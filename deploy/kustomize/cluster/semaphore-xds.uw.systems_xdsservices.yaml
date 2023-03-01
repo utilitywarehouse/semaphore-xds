@@ -30,7 +30,7 @@ spec:
     - jsonPath: .spec.priorityStrategy
       name: Priority_Strategy
       type: string
-    - jsonPath: .spec.retry.on
+    - jsonPath: .spec.retry.retryOn
       name: Retry_On
       type: string
     name: v1alpha1

@@ -87,7 +87,7 @@ type XdsServiceSpec struct {
 // +kubebuilder:printcolumn:name="Lb_Policy",type=string,JSONPath=`.spec.loadBalancing.policy`
 // +kubebuilder:printcolumn:name="Remote_Endpoints",type=string,JSONPath=`.spec.enableRemoteEndpoints`
 // +kubebuilder:printcolumn:name="Priority_Strategy",type=string,JSONPath=`.spec.priorityStrategy`
-// +kubebuilder:printcolumn:name="Retry_On",type=string,JSONPath=`.spec.retry.on`
+// +kubebuilder:printcolumn:name="Retry_On",type=string,JSONPath=`.spec.retry.retryOn`
 type XdsService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
