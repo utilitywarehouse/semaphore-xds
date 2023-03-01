@@ -212,9 +212,6 @@ func PrioritizeLocal(strategy xdsTypes.PolicyStrategy) bool {
 }
 
 // ParseRetryOn validates the retry_on value and returns it if valid.
-//
-// Currently only support gRPC's subset of Envoy's `retry_on` values:
-// https://github.com/grpc/grpc-go/blob/3775f633ce208a524fd882c9b4678b95b8a5a4d4/xds/internal/xdsclient/xdsresource/unmarshal_rds.go#L165-L173
 func ParseRetryOn(on []string) string {
 	valid := make([]string, 0, len(on))
 	for _, s := range on {
@@ -224,7 +221,6 @@ func ParseRetryOn(on []string) string {
 }
 
 // ParseNumRetries parses the number of retries.
-// Failing to parse the number will default to 1 retry.
 func ParseNumRetries(num *uint32) *wrappers.UInt32Value {
 	if num == nil {
 		return &wrappers.UInt32Value{Value: 1}
