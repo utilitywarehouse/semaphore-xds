@@ -295,11 +295,11 @@ func extractRetryPolicy(policy *v1alpha1.XdsServiceSpecRetry) *routev3.RetryPoli
 	if policy == nil {
 		return nil
 	}
-	if len(policy.On) == 0 {
+	if len(policy.RetryOn) == 0 {
 		return nil
 	}
 	return &routev3.RetryPolicy{
-		RetryOn:      xds.ParseRetryOn(policy.On),
+		RetryOn:      xds.ParseRetryOn(policy.RetryOn),
 		NumRetries:   xds.ParseNumRetries(policy.NumRetries),
 		RetryBackOff: xds.ParseRetryBackOff(policy.RetryBackOff.BaseInterval, policy.RetryBackOff.MaxInterval),
 	}

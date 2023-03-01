@@ -41,7 +41,7 @@ type XdsServiceSpecRetry struct {
 	// +optional
 	// +kubebuilder:default=none
 	// +kubebuilder:validation:UniqueItems=true
-	On []string `json:"on,omitempty"`
+	RetryOn []string `json:"retryOn,omitempty"`
 	// Number of retries that will be attempted.
 	// +optional
 	// +kubebuilder:default=1
