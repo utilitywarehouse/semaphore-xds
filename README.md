@@ -38,6 +38,12 @@ spec:
     policy: <policy-name> # Optional. Defaults to round_robin
   enableRemoteEndpoints: false # Whether to look at remote clusters for service endpoints. Defaults to false
   priorityStrategy: local-first # The strategy to use when assigning priorities to endpoints. Possible values are "none|local-first". Defaults to "none"
+  retry:
+    retryOn: ["internal", "cancelled"]
+    numRetries: 1
+    backoff:
+      baseInterval: "25ms"
+      maxInterval: "250ms"
 ```
 
 Note that an XdsService can only point to a Service under the same namespace.
@@ -67,6 +73,15 @@ The supported values are derived from the envoy proxy library for [cluster lb
 policies](https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3#Cluster_LbPolicy).
 If none is set, or an invalid value is passed, the server configuration will
 default to round robin.
+
+### Retry policy
+
+`retryOn` must be set with at least one value in order for the rest of the policy to be served, else the whole policy will be ignored.
+We are typically using xDS with Go gRPC services, which as of writing only [certain values](https://github.com/grpc/grpc-go/blob/3775f633ce208a524fd882c9b4678b95b8a5a4d4/xds/internal/xdsclient/xdsresource/unmarshal_rds.go#L165-L173) are supported.
+
+`backoff` configures the exponential backoff parameters. This is optional, in which case the default value of 25ms for base interval is used along with 10 times the base for the max interval.
+
+**Note:** this retry policy will apply to all service routes, eventually we'll look to expand to offering per-route config.
 
 ### xDS service address
 
