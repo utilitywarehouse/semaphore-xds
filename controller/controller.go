@@ -233,7 +233,7 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 	store := xds.NewXdsEnpointStore()
 	for _, s := range svcs.All() {
 		// Add EndpointSlices from the local cluster
-		es, err := c.localClient.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name))
+		es, err := c.localClient.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name), s.Service.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +251,7 @@ func (c *Controller) endpointsStoreForXdsServiceStore(svcs xds.XdsServiceStore) 
 				priority = uint32(1)
 			}
 			for _, client := range c.remoteClients {
-				es, err := client.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name))
+				es, err := client.EndpointSliceList(fmt.Sprintf("%s=%s", kube.KubernetesIOServiceNameLabel, s.Service.Name), s.Service.Namespace)
 				if err != nil {
 					return nil, err
 				}

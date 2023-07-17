@@ -141,7 +141,7 @@ func (c *clientMock) EndpointSlice(name, namespace string) (*discoveryv1.Endpoin
 }
 
 // EndpointSliceList returns all the EndpointSlices selected by a label
-func (c *clientMock) EndpointSliceList(labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
+func (c *clientMock) EndpointSliceList(labelSelector, namespace string) ([]*discoveryv1.EndpointSlice, error) {
 	return c.endpointSlices, nil
 }
 

@@ -98,7 +98,7 @@ type Client interface {
 	KubeClient() kubernetes.Interface
 	Service(namespace, name string) (*corev1.Service, error)
 	EndpointSlice(name, namespace string) (*discoveryv1.EndpointSlice, error)
-	EndpointSliceList(labelSelector string) ([]*discoveryv1.EndpointSlice, error)
+	EndpointSliceList(labelSelector, namespace string) ([]*discoveryv1.EndpointSlice, error)
 	XdsServiceList() ([]*v1alpha1.XdsService, error)
 }
 
@@ -213,7 +213,7 @@ func (c *clientWrapper) EndpointSlice(name, namespace string) (*discoveryv1.Endp
 }
 
 // EndpointSliceList returns all the EndpointSlices selected by a label
-func (c *clientWrapper) EndpointSliceList(labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
+func (c *clientWrapper) EndpointSliceList(labelSelector, namespace string) ([]*discoveryv1.EndpointSlice, error) {
 	// Return an empty slice if watcher is not initialised yet (for remote watchers)
 	if c.factoryKube == nil {
 		return []*discoveryv1.EndpointSlice{}, nil
@@ -222,7 +222,7 @@ func (c *clientWrapper) EndpointSliceList(labelSelector string) ([]*discoveryv1.
 	if err != nil {
 		return []*discoveryv1.EndpointSlice{}, err
 	}
-	return filterKubeNotFound(c.factoryKube.Discovery().V1().EndpointSlices().Lister().EndpointSlices(metav1.NamespaceAll).List(selector))
+	return filterKubeNotFound(c.factoryKube.Discovery().V1().EndpointSlices().Lister().EndpointSlices(namespace).List(selector))
 }
 
 // XdsServiceList lists the watched XdsServices resources
