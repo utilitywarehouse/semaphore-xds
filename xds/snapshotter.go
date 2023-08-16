@@ -119,16 +119,16 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 }
 
 func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) error {
-	log.Logger.Info("OnStreamOpen", "id", id, "type", typ)
+	log.Logger.Debug("OnStreamOpen", "id", id, "type", typ)
 	return nil
 }
 
 func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
-	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
+	log.Logger.Debug("OnStreamClosed", "id", id, "node", node)
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
-	log.Logger.Info("OnStreamRequest",
+	log.Logger.Debug("OnStreamRequest",
 		"id", id,
 		"received", r.GetTypeUrl(),
 		"node", r.GetNode().GetId(),
@@ -140,7 +140,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 	return nil
 }
 func (s *Snapshotter) OnStreamResponse(ctx context.Context, id int64, req *discovery.DiscoveryRequest, resp *discovery.DiscoveryResponse) {
-	log.Logger.Info("OnStreamResponse",
+	log.Logger.Debug("OnStreamResponse",
 		"id", id,
 		"type", resp.GetTypeUrl(),
 		"version", resp.GetVersionInfo(),
