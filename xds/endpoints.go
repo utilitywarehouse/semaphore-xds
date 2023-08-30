@@ -167,11 +167,18 @@ func endpointSliceToClusterEndpoints(e *discoveryv1.EndpointSlice, priority uint
 	ceps := []EdsClusterEndpoints{}
 	for _, p := range e.Ports {
 		for _, ep := range e.Endpoints {
+			// In case there is no zone specified we should add a dummy value and still register the
+			// endpoint and serve it to clients. Then we can rely on an alert which checks the zone
+			// since this might affect routing algorithms.
+			zone := "none"
+			if ep.Zone != nil {
+				zone = *ep.Zone
+			}
 			ceps = append(ceps, EdsClusterEndpoints{
 				addresses: ep.Addresses,
 				port:      *p.Port,
 				priority:  priority,
-				zone:      *ep.Zone,
+				zone:      zone,
 				subzone:   ep.TargetRef.Name, // This should be the respective pod name, hacky way to have separate localities per endpoint.
 				healthy:   *ep.Conditions.Ready,
 			})
