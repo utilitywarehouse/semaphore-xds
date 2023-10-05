@@ -19,7 +19,7 @@ func init() {
 }
 
 func TestSnapServices_EmptyServiceList(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
@@ -33,7 +33,7 @@ func TestSnapServices_EmptyServiceList(t *testing.T) {
 }
 
 func TestSnapServices_SingleService(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,7 +66,7 @@ func TestSnapServices_SingleService(t *testing.T) {
 }
 
 func TestSnapServices_NoServicePorts(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,7 +90,7 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 }
 
 func TestSnapServices_MultipleServicePorts(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -127,7 +127,7 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 }
 
 func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	endpointStore := NewXdsEnpointStore()
 	snapshotter.SnapEndpoints(endpointStore)
 	snap, err := snapshotter.endpointsCache.GetSnapshot(testNodeID)
@@ -139,7 +139,7 @@ func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
 }
 
 func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	log.InitLogger("test-semaphore-xds", "debug")
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -158,7 +158,7 @@ func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
 }
 
 func TestSnapEndpoints_UpdateAddress(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0))
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 	// Create test EndpointSlice
 	httpPortName := "http"
 	httpPortValue := int32(80)
