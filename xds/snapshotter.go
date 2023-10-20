@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
@@ -17,20 +18,33 @@ import (
 	cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server/v3"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
 )
 
 const grpcMaxConcurrentStreams = 1000
 
+// Stream will keep the peer address handy for logging and a rate limiter per stream
+type Stream struct {
+	peerAddress      string
+	requestRateLimit *rate.Limiter
+}
+
 type Snapshotter struct {
-	servePort            uint
-	servicesCache        cache.SnapshotCache
-	serviceSnapVersion   int32
-	endpointsCache       cache.SnapshotCache
-	endpointsSnapVersion int32
-	muxCache             cache.MuxCache
+	servePort              uint
+	servicesCache          cache.SnapshotCache
+	serviceSnapVersion     int32
+	endpointsCache         cache.SnapshotCache
+	endpointsSnapVersion   int32
+	muxCache               cache.MuxCache
+	requestRateLimit       *rate.Limiter     // maximum number of requests allowed to server
+	streamRequestPerSecond float64           // maximum number of requests per stream per second
+	streams                map[int64]*Stream // map of open streams
 }
 
 // Maps type urls to services and endpoints for muxCache
@@ -45,7 +59,8 @@ func mapTypeURL(typeURL string) string {
 	}
 }
 
-func NewSnapshotter(port uint) *Snapshotter {
+// NewSnapshotter needs a grpc server port and the allowed requests limits per server and stream per second
+func NewSnapshotter(port uint, requestLimit, streamRequestLimit float64) *Snapshotter {
 	servicesCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger)
 	endpointsCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger) // This could be a linear cache? https://pkg.go.dev/github.com/envoyproxy/go-control-plane/pkg/cache/v3#LinearCache
 	muxCache := cache.MuxCache{
@@ -61,10 +76,13 @@ func NewSnapshotter(port uint) *Snapshotter {
 		},
 	}
 	return &Snapshotter{
-		servePort:      port,
-		servicesCache:  servicesCache,
-		endpointsCache: endpointsCache,
-		muxCache:       muxCache,
+		servePort:              port,
+		servicesCache:          servicesCache,
+		endpointsCache:         endpointsCache,
+		muxCache:               muxCache,
+		requestRateLimit:       rate.NewLimiter(rate.Limit(requestLimit), 1),
+		streamRequestPerSecond: streamRequestLimit,
+		streams:                make(map[int64]*Stream),
 	}
 }
 
@@ -119,17 +137,29 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 }
 
 func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) error {
-	log.Logger.Debug("OnStreamOpen", "id", id, "type", typ)
+	var peerAddr string
+	if peerInfo, ok := peer.FromContext(ctx); ok {
+		peerAddr = peerInfo.Addr.String()
+	}
+	log.Logger.Info("OnStreamOpen", "peer address", peerAddr, "id", id, "type", typ)
+	s.streams[id] = &Stream{
+		peerAddress:      peerAddr,
+		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
+	}
 	return nil
 }
 
 func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
-	log.Logger.Debug("OnStreamClosed", "id", id, "node", node)
+	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
+	delete(s.streams, id)
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
-	log.Logger.Debug("OnStreamRequest",
+	ctx := context.Background()
+	stream := s.streams[id]
+	log.Logger.Info("OnStreamRequest",
 		"id", id,
+		"peer", stream.peerAddress,
 		"received", r.GetTypeUrl(),
 		"node", r.GetNode().GetId(),
 		"locality", r.GetNode().GetLocality(),
@@ -137,10 +167,22 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 		"version", r.GetVersionInfo(),
 	)
 	s.debugDiscoveryRequest(r)
+
+	// Verify peer is not exceeding requests rate limit
+	if err := waitForRequestLimit(ctx, stream.requestRateLimit); err != nil {
+		log.Logger.Warn("Peer: %s exceeded rate limit: %v", stream.peerAddress, err)
+		return status.Errorf(codes.ResourceExhausted, "stream request rate limit exceeded: %v", err)
+	}
+	// Verify server's global request limit
+	if err := waitForRequestLimit(ctx, s.requestRateLimit); err != nil {
+		log.Logger.Warn("Sever rate limit exceeded: %v for peer request", err, stream.peerAddress)
+		return status.Errorf(codes.ResourceExhausted, "stream request rate limit exceeded: %v", err)
+	}
 	return nil
 }
+
 func (s *Snapshotter) OnStreamResponse(ctx context.Context, id int64, req *discovery.DiscoveryRequest, resp *discovery.DiscoveryResponse) {
-	log.Logger.Debug("OnStreamResponse",
+	log.Logger.Info("OnStreamResponse",
 		"id", id,
 		"type", resp.GetTypeUrl(),
 		"version", resp.GetVersionInfo(),
@@ -211,6 +253,19 @@ func runGrpcServer(ctx context.Context, grpcServer *grpc.Server, port uint) {
 	}()
 	<-ctx.Done()
 	grpcServer.GracefulStop()
+}
+
+func waitForRequestLimit(ctx context.Context, requestRateLimit *rate.Limiter) error {
+	if requestRateLimit.Limit() == 0 {
+		// Allow opt out when rate limiting is set to 0qps
+		return nil
+	}
+	// Give a bit of time for queue to clear out, but if not fail after 1 second.
+	// Returning an error will cause the stream to be closed. Client will connect
+	// to another instance in best case, or retry with backoff.
+	wait, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	return requestRateLimit.Wait(wait)
 }
 
 func (s *Snapshotter) debugDiscoveryRequest(r *discovery.DiscoveryRequest) {
