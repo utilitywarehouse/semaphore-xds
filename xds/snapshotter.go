@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,6 +46,7 @@ type Snapshotter struct {
 	requestRateLimit       *rate.Limiter     // maximum number of requests allowed to server
 	streamRequestPerSecond float64           // maximum number of requests per stream per second
 	streams                map[int64]*Stream // map of open streams
+	streamsLock            sync.RWMutex
 }
 
 // Maps type urls to services and endpoints for muxCache
@@ -83,6 +85,7 @@ func NewSnapshotter(port uint, requestLimit, streamRequestLimit float64) *Snapsh
 		requestRateLimit:       rate.NewLimiter(rate.Limit(requestLimit), 1),
 		streamRequestPerSecond: streamRequestLimit,
 		streams:                make(map[int64]*Stream),
+		streamsLock:            sync.RWMutex{},
 	}
 }
 
@@ -142,6 +145,8 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 		peerAddr = peerInfo.Addr.String()
 	}
 	log.Logger.Info("OnStreamOpen", "peer address", peerAddr, "id", id, "type", typ)
+	s.streamsLock.Lock()
+	defer s.streamsLock.Unlock()
 	s.streams[id] = &Stream{
 		peerAddress:      peerAddr,
 		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
@@ -151,12 +156,16 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 
 func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
+	s.streamsLock.Lock()
+	defer s.streamsLock.Unlock()
 	delete(s.streams, id)
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
 	ctx := context.Background()
+	s.streamsLock.RLock()
 	stream := s.streams[id]
+	s.streamsLock.RUnlock()
 	log.Logger.Info("OnStreamRequest",
 		"id", id,
 		"peer", stream.peerAddress,
