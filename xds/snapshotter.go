@@ -22,6 +22,7 @@ import (
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -232,7 +233,10 @@ func (s *Snapshotter) ListenAndServe() {
 	ctx := context.Background()
 
 	xdsServer := xds.NewServer(ctx, &s.muxCache, s)
-	grpcOptions := []grpc.ServerOption{grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams)}
+	grpcOptions := []grpc.ServerOption{
+		grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams),
+		grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 30 * time.Minute}),
+	}
 	grpcServer := grpc.NewServer(grpcOptions...)
 	registerServices(grpcServer, xdsServer)
 	runGrpcServer(ctx, grpcServer, s.servePort)
