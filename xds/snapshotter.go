@@ -350,7 +350,14 @@ func (s *Snapshotter) getResourcesFromCache(typeURL string, resources []string) 
 	for _, name := range resources {
 		r, ok := fullResources[name]
 		if !ok {
-			return res, fmt.Errorf("Requested resource: %s of type: %s not found", name, typeURL)
+			// If a resource is not found, do not fail, which will result in closing the stream.
+			// Instead log an warning and keep populating the resources list
+			log.Logger.Warn(
+				"Requested resource not found",
+				"name", name,
+				"type", typeURL,
+			)
+			continue
 		}
 		res = append(res, r)
 	}
