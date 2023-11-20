@@ -23,10 +23,6 @@ import (
 	xdsTypes "github.com/utilitywarehouse/semaphore-xds/types"
 )
 
-const (
-	EmptyNodeID = ""
-)
-
 func makeClusterName(name, namespace string, port int32) string {
 	//return net.JoinHostPort(fmt.Sprintf("%s.%s", name, namespace), strconv.Itoa(int(port)))
 	return fmt.Sprintf("%s.%s.%s", name, namespace, strconv.Itoa(int(port)))
@@ -248,4 +244,24 @@ func ParseRetryBackOff(base, max string) *routev3.RetryPolicy_RetryBackOff {
 		BaseInterval: durationpb.New(baseDuration),
 		MaxInterval:  durationpb.New(maxDuration),
 	}
+}
+
+// resourcesMatch checks if 2 slices contain the same set of resources
+func resourcesMatch(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, e := range b {
+		inSlice := false
+		for _, r := range a {
+			if e == r {
+				inSlice = true
+				break
+			}
+		}
+		if !inSlice {
+			return false
+		}
+	}
+	return true
 }
