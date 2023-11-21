@@ -286,7 +286,8 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 
 	// Add a new test node
 	nodeID := "test-node"
-	snapshotter.addNewNode(nodeID)
+	nodeAddress := "10.0.0.1"
+	snapshotter.addNewNode(nodeID, nodeAddress)
 	// Request all listener resources for the node - Update the node snapshot
 	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80"}))
 	if err := snapshotter.updateNodeSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80"}); err != nil {

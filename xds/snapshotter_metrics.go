@@ -1,4 +1,4 @@
-package metrics
+package xds
 
 import (
 	"fmt"
@@ -9,8 +9,71 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
-	"github.com/utilitywarehouse/semaphore-xds/xds"
 )
+
+var (
+	xdsClientOnStreamOpen = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "semaphore_xds_on_stream_open",
+		Help: "Total number of client open stream requests to the xds server",
+	},
+		[]string{"address"},
+	)
+	xdsClientOnStreamClosed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "semaphore_xds_on_stream_close",
+		Help: "Total number of close stream notifications from the xds server",
+	},
+		[]string{"address"},
+	)
+	xdsClientOnStreamRequest = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "semaphore_xds_on_stream_request",
+		Help: "Total number of client requests for resources discovery to the xds server",
+	},
+		[]string{"nodeID", "address", "typeURL"},
+	)
+	xdsClientOnStreamResponse = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "semaphore_xds_on_stream_response",
+		Help: "Total number of server responses for resources discovery to the xds server",
+	},
+		[]string{"nodeID", "address", "typeURL"},
+	)
+)
+
+func metricOnStreamOpenInc(address string) {
+	xdsClientOnStreamOpen.With(prometheus.Labels{
+		"address": address,
+	}).Inc()
+}
+
+func metricOnStreamClosedInc(address string) {
+	xdsClientOnStreamClosed.With(prometheus.Labels{
+		"address": address,
+	}).Inc()
+}
+
+func metricOnStreamRequestInc(nodeID, address, typeURL string) {
+	xdsClientOnStreamRequest.With(prometheus.Labels{
+		"nodeID":  nodeID,
+		"address": address,
+		"typeURL": typeURL,
+	}).Inc()
+}
+
+func metricOnStreamResponseInc(nodeID, address, typeURL string) {
+	xdsClientOnStreamResponse.With(prometheus.Labels{
+		"nodeID":  nodeID,
+		"address": address,
+		"typeURL": typeURL,
+	}).Inc()
+}
+
+func init() {
+	prometheus.MustRegister(
+		xdsClientOnStreamOpen,
+		xdsClientOnStreamClosed,
+		xdsClientOnStreamRequest,
+		xdsClientOnStreamResponse,
+	)
+}
 
 // A snapMetricscollector is a prometheus.Collector for a Snapshotter.
 type snapMetricsCollector struct {
@@ -18,16 +81,17 @@ type snapMetricsCollector struct {
 	EndpointInfo *prometheus.Desc
 	ListenerInfo *prometheus.Desc
 	RouteInfo    *prometheus.Desc
+	NodeInfo     *prometheus.Desc
 
-	snapshotter *xds.Snapshotter
+	snapshotter *Snapshotter
 }
 
-func InitSnapMetricsCollector(snapshotter *xds.Snapshotter) {
+func InitSnapMetricsCollector(snapshotter *Snapshotter) {
 	mc := newSnapMetricsCollector(snapshotter)
 	prometheus.MustRegister(mc)
 }
 
-func newSnapMetricsCollector(snapshotter *xds.Snapshotter) prometheus.Collector {
+func newSnapMetricsCollector(snapshotter *Snapshotter) prometheus.Collector {
 	return &snapMetricsCollector{
 		ClusterInfo: prometheus.NewDesc(
 			"semaphore_xds_snapshot_cluster",
@@ -53,6 +117,12 @@ func newSnapMetricsCollector(snapshotter *xds.Snapshotter) prometheus.Collector 
 			[]string{"type", "name", "path_prefix", "domains", "virtual_host", "cluster_name"},
 			nil,
 		),
+		NodeInfo: prometheus.NewDesc(
+			"semaphore_xds_node_info",
+			"Metadata about a registered node to xDS server",
+			[]string{"nodeID", "address"},
+			nil,
+		),
 		snapshotter: snapshotter,
 	}
 }
@@ -64,6 +134,7 @@ func (c *snapMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 		c.EndpointInfo,
 		c.ListenerInfo,
 		c.RouteInfo,
+		c.NodeInfo,
 	}
 
 	for _, d := range ds {
@@ -72,7 +143,7 @@ func (c *snapMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *snapMetricsCollector) Collect(ch chan<- prometheus.Metric) {
-	servicesSnap, err := c.snapshotter.ServicesSnapshot(xds.EmptyNodeID)
+	servicesSnap, err := c.snapshotter.ServicesSnapshot(EmptyNodeID)
 	if err != nil {
 		log.Logger.Error("Failed to get services snapshot for metrics collection", "err", err)
 		// TODO: Return an invalid metric?
@@ -82,24 +153,26 @@ func (c *snapMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	c.collectRouteMetrics(ch, servicesSnap)
 	c.collectClusterMetrics(ch, servicesSnap)
 
-	endpointsSnap, err := c.snapshotter.EndpointsSnapshot(xds.EmptyNodeID)
+	endpointsSnap, err := c.snapshotter.EndpointsSnapshot(EmptyNodeID)
 	if err != nil {
 		log.Logger.Error("Failed to get services snapshot for metrics collection", "err", err)
 		// TODO: Return an invalid metric?
 		return
 	}
 	c.collectEndpointsMetrics(ch, endpointsSnap)
+
+	c.collectNodeMetrics(ch)
 }
 
 func (c *snapMetricsCollector) collectListenerMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
 	listeners := snapshot.GetResources(resource.ListenerType)
 	for _, l := range listeners {
-		listener, err := xds.UnmarshalResourceToListener(l)
+		listener, err := UnmarshalResourceToListener(l)
 		if err != nil {
 			log.Logger.Error("Failed to unmarshal listener resource", "err", err)
 			continue
 		}
-		manager, err := xds.ExtractManagerFromListener(listener)
+		manager, err := ExtractManagerFromListener(listener)
 		if err != nil {
 			log.Logger.Error("Failed to extract manager from listener", "err", err)
 			continue
@@ -117,7 +190,7 @@ func (c *snapMetricsCollector) collectListenerMetrics(ch chan<- prometheus.Metri
 func (c *snapMetricsCollector) collectRouteMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
 	routes := snapshot.GetResources(resource.RouteType)
 	for _, r := range routes {
-		routeConfig, err := xds.UnmarshalResourceToRouteConfiguration(r)
+		routeConfig, err := UnmarshalResourceToRouteConfiguration(r)
 		if err != nil {
 			log.Logger.Error("Failed to unmarshal route configuration resource", "err", err)
 			continue
@@ -139,7 +212,7 @@ func (c *snapMetricsCollector) collectRouteMetrics(ch chan<- prometheus.Metric, 
 func (c *snapMetricsCollector) collectClusterMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
 	clusters := snapshot.GetResources(resource.ClusterType)
 	for _, cl := range clusters {
-		cluster, err := xds.UnmarshalResourceToCluster(cl)
+		cluster, err := UnmarshalResourceToCluster(cl)
 		if err != nil {
 			log.Logger.Error("Failed to unmarshal cluster resource", "err", err)
 			continue
@@ -149,7 +222,7 @@ func (c *snapMetricsCollector) collectClusterMetrics(ch chan<- prometheus.Metric
 			prometheus.GaugeValue,
 			1,
 			// "type", "name", "lb_policy", "discovery_type"
-			resource.ClusterType, cluster.Name, xds.ParseClusterLbPolicy(cluster.LbPolicy), xds.ParseClusterDiscoveryType(cluster.GetType()),
+			resource.ClusterType, cluster.Name, ParseClusterLbPolicy(cluster.LbPolicy), ParseClusterDiscoveryType(cluster.GetType()),
 		)
 	}
 }
@@ -157,14 +230,14 @@ func (c *snapMetricsCollector) collectClusterMetrics(ch chan<- prometheus.Metric
 func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
 	endpoints := snapshot.GetResources(resource.EndpointType)
 	for _, e := range endpoints {
-		endpoint, err := xds.UnmarshalResourceToEndpoint(e)
+		endpoint, err := UnmarshalResourceToEndpoint(e)
 		if err != nil {
 			log.Logger.Error("Failed to unmarshal endpoint ClusterLoadAssignment", "err", err)
 			continue
 		}
 		for _, lbEndpoints := range endpoint.Endpoints {
 			for _, lbEndpoint := range lbEndpoints.GetLbEndpoints() {
-				healthStatus := xds.ParseLbEndpointHealthStatus(lbEndpoint.HealthStatus)
+				healthStatus := ParseLbEndpointHealthStatus(lbEndpoint.HealthStatus)
 				socketAddress := lbEndpoint.GetEndpoint().Address.GetSocketAddress()
 				address := fmt.Sprintf("%s:%s", socketAddress.GetAddress(), fmt.Sprint(socketAddress.GetPortValue()))
 				priority := fmt.Sprint(lbEndpoints.Priority)
@@ -177,5 +250,17 @@ func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metr
 				)
 			}
 		}
+	}
+}
+
+func (c *snapMetricsCollector) collectNodeMetrics(ch chan<- prometheus.Metric) {
+	for nodeID, address := range c.snapshotter.NodesMap() {
+		ch <- prometheus.MustNewConstMetric(
+			c.NodeInfo,
+			prometheus.GaugeValue,
+			1,
+			// "nodeID", "address"
+			nodeID, address,
+		)
 	}
 }

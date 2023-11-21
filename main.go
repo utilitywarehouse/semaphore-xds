@@ -13,7 +13,6 @@ import (
 	"github.com/utilitywarehouse/semaphore-xds/controller"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
-	"github.com/utilitywarehouse/semaphore-xds/metrics"
 	"github.com/utilitywarehouse/semaphore-xds/xds"
 )
 
@@ -52,7 +51,7 @@ func main() {
 
 	localClient, remoteClients := createClientsFromConfig(*flagClustersConfigPath)
 	snapshotter := xds.NewSnapshotter(*flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond)
-	metrics.InitSnapMetricsCollector(snapshotter)
+	xds.InitSnapMetricsCollector(snapshotter)
 	go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
 
 	controller := controller.NewController(

@@ -1,4 +1,4 @@
-package metrics
+package xds
 
 import (
 	"fmt"
@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
-	"github.com/utilitywarehouse/semaphore-xds/xds"
 )
 
 func TestSnapMetricsCollector(t *testing.T) {
@@ -82,24 +81,24 @@ func TestSnapMetricsCollector(t *testing.T) {
 		expectHttpClusterName   = "foo.bar.80"
 		expectHttpsClusterName  = "foo.bar.443"
 	)
-	serviceStore := xds.NewXdsServiceStore()
+	serviceStore := NewXdsServiceStore()
 	for _, s := range services {
-		serviceStore.AddOrUpdate(s, xds.Service{
+		serviceStore.AddOrUpdate(s, Service{
 			Policy:                   clusterv3.Cluster_ROUND_ROBIN,
 			EnableRemoteEndpoints:    false,
 			PrioritizeLocalEndpoints: false,
 		})
 	}
-	endpointStore := xds.NewXdsEnpointStore()
+	endpointStore := NewXdsEnpointStore()
 	for _, e := range endpointSlices {
 		endpointStore.Add("foo", "bar", e, uint32(0))
 	}
 	tests := []struct {
 		name           string
 		services       []*v1.Service
-		serviceStore   xds.XdsServiceStore
+		serviceStore   XdsServiceStore
 		endpointSlices []*discoveryv1.EndpointSlice
-		endpointStore  xds.XdsEndpointStore
+		endpointStore  XdsEndpointStore
 		metrics        []string
 	}{
 		{
@@ -127,7 +126,7 @@ func TestSnapMetricsCollector(t *testing.T) {
 	log.InitLogger("test-semaphore-xds-metrics", "debug")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			snapshotter := xds.NewSnapshotter(uint(0), float64(0), float64(0))
+			snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 			snapshotter.SnapServices(tt.serviceStore)
 			snapshotter.SnapEndpoints(tt.endpointStore)
 			body := promtest.Collect(t, newSnapMetricsCollector(snapshotter))
