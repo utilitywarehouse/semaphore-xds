@@ -1,4 +1,4 @@
-package metrics
+package kube
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,14 +27,14 @@ func init() {
 	)
 }
 
-func IncKubeWatcherEvents(kind string, eventType watch.EventType) {
+func metricIncKubeWatcherEvents(kind string, eventType watch.EventType) {
 	kubeWatcherEvents.With(prometheus.Labels{
 		"kind":       kind,
 		"event_type": string(eventType),
 	}).Inc()
 }
 
-func SetKubeWatcherObjects(kind string, v float64) {
+func metricSetKubeWatcherObjects(kind string, v float64) {
 	kubeWatcherObjects.With(prometheus.Labels{
 		"kind": kind,
 	}).Set(v)
