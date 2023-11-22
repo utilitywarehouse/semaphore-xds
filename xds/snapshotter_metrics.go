@@ -28,13 +28,13 @@ var (
 		Name: "semaphore_xds_on_stream_request",
 		Help: "Total number of client requests for resources discovery to the xds server",
 	},
-		[]string{"nodeID", "address", "typeURL"},
+		[]string{"node_id", "address", "typeURL"},
 	)
 	xdsClientOnStreamResponse = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "semaphore_xds_on_stream_response",
 		Help: "Total number of server responses for resources discovery to the xds server",
 	},
-		[]string{"nodeID", "address", "typeURL"},
+		[]string{"node_id", "address", "typeURL"},
 	)
 )
 
@@ -52,7 +52,7 @@ func metricOnStreamClosedInc(address string) {
 
 func metricOnStreamRequestInc(nodeID, address, typeURL string) {
 	xdsClientOnStreamRequest.With(prometheus.Labels{
-		"nodeID":  nodeID,
+		"node_id": nodeID,
 		"address": address,
 		"typeURL": typeURL,
 	}).Inc()
@@ -60,7 +60,7 @@ func metricOnStreamRequestInc(nodeID, address, typeURL string) {
 
 func metricOnStreamResponseInc(nodeID, address, typeURL string) {
 	xdsClientOnStreamResponse.With(prometheus.Labels{
-		"nodeID":  nodeID,
+		"node_id": nodeID,
 		"address": address,
 		"typeURL": typeURL,
 	}).Inc()
