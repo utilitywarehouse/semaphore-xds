@@ -95,6 +95,8 @@ func TestSnapMetricsCollector(t *testing.T) {
 	}
 	tests := []struct {
 		name           string
+		nodeID         string
+		nodeAddress    string
 		services       []*v1.Service
 		serviceStore   XdsServiceStore
 		endpointSlices []*discoveryv1.EndpointSlice
@@ -103,23 +105,24 @@ func TestSnapMetricsCollector(t *testing.T) {
 	}{
 		{
 			name:           "ok",
+			nodeID:         "test-node",
+			nodeAddress:    "10.0.0.1",
 			services:       services,
 			serviceStore:   serviceStore,
 			endpointSlices: endpointSlices,
 			endpointStore:  endpointStore,
 			metrics: []string{
-				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",route_config="%s",type="%s"} 1`, expectHttpListenerName, expectHttpRouteName, resource.ListenerType),
-				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",route_config="%s",type="%s"} 1`, expectHttpsListenerName, expectHttpsRouteName, resource.ListenerType),
-				fmt.Sprintf(`semaphore_xds_snapshot_route{cluster_name="%s",domains="%s",name="%s",path_prefix="",type="%s",virtual_host="%s"} 1`,
-					expectHttpClusterName, expectHttpDomains, expectHttpRouteName, resource.RouteType, expectHttpVhost),
-				fmt.Sprintf(`semaphore_xds_snapshot_route{cluster_name="%s",domains="%s",name="%s",path_prefix="",type="%s",virtual_host="%s"} 1`,
-					expectHttpsClusterName, expectHttpsDomains, expectHttpsRouteName, resource.RouteType, expectHttpsVhost),
-				fmt.Sprintf(`semaphore_xds_snapshot_cluster{discovery_type="eds",lb_policy="round_robin",name="%s",type="%s"} 1`, expectHttpClusterName, resource.ClusterType),
-				fmt.Sprintf(`semaphore_xds_snapshot_cluster{discovery_type="eds",lb_policy="round_robin",name="%s",type="%s"} 1`, expectHttpsClusterName, resource.ClusterType),
-				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",priority="0",type="%s"} 1`,
-					expectHttpClusterName, "10.2.1.1:80", resource.EndpointType),
-				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",priority="0",type="%s"} 1`,
-					expectHttpsClusterName, "10.2.1.1:443", resource.EndpointType),
+				fmt.Sprintf(`semaphore_xds_node_info{address="%s",node_id="%s"} 1`, "10.0.0.1", "test-node"),
+				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",node_id="%s",route_config="%s",type="%s"} 1`, expectHttpListenerName, EmptyNodeID, expectHttpRouteName, resource.ListenerType),
+				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",node_id="%s",route_config="%s",type="%s"} 1`, expectHttpsListenerName, EmptyNodeID, expectHttpsRouteName, resource.ListenerType),
+				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",node_id="%s",route_config="%s",type="%s"} 1`, expectHttpListenerName, "test-node", expectHttpRouteName, resource.ListenerType),
+				fmt.Sprintf(`semaphore_xds_snapshot_listener{name="%s",node_id="%s",route_config="%s",type="%s"} 1`, expectHttpsListenerName, "test-node", expectHttpsRouteName, resource.ListenerType),
+				fmt.Sprintf(`semaphore_xds_snapshot_route{cluster_name="%s",domains="%s",name="%s",node_id="%s",path_prefix="",type="%s",virtual_host="%s"} 1`, expectHttpClusterName, expectHttpDomains, expectHttpRouteName, EmptyNodeID, resource.RouteType, expectHttpVhost),
+				fmt.Sprintf(`semaphore_xds_snapshot_route{cluster_name="%s",domains="%s",name="%s",node_id="%s",path_prefix="",type="%s",virtual_host="%s"} 1`, expectHttpsClusterName, expectHttpsDomains, expectHttpsRouteName, EmptyNodeID, resource.RouteType, expectHttpsVhost),
+				fmt.Sprintf(`semaphore_xds_snapshot_cluster{discovery_type="eds",lb_policy="round_robin",name="%s",node_id="%s",type="%s"} 1`, expectHttpClusterName, EmptyNodeID, resource.ClusterType),
+				fmt.Sprintf(`semaphore_xds_snapshot_cluster{discovery_type="eds",lb_policy="round_robin",name="%s",node_id="%s",type="%s"} 1`, expectHttpsClusterName, EmptyNodeID, resource.ClusterType),
+				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",node_id="%s",priority="0",type="%s"} 1`, expectHttpClusterName, "10.2.1.1:80", EmptyNodeID, resource.EndpointType),
+				fmt.Sprintf(`semaphore_xds_snapshot_endpoint{cluster_name="%s",health_status="healthy",lb_address="%s",locality_subzone="foo-xzf",locality_zone="test",node_id="%s",priority="0",type="%s"} 1`, expectHttpsClusterName, "10.2.1.1:443", EmptyNodeID, resource.EndpointType),
 			},
 		},
 	}
@@ -129,6 +132,13 @@ func TestSnapMetricsCollector(t *testing.T) {
 			snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
 			snapshotter.SnapServices(tt.serviceStore)
 			snapshotter.SnapEndpoints(tt.endpointStore)
+			snapshotter.addNewNode(tt.nodeID, tt.nodeAddress)
+			if err := snapshotter.updateNodeSnapshot(tt.nodeID, resource.ListenerType, []string{expectHttpListenerName}); err != nil {
+				t.Fatal(err)
+			}
+			if err := snapshotter.updateNodeSnapshot(tt.nodeID, resource.ListenerType, []string{expectHttpsListenerName}); err != nil {
+				t.Fatal(err)
+			}
 			body := promtest.Collect(t, newSnapMetricsCollector(snapshotter))
 
 			if !promtest.Lint(t, body) {

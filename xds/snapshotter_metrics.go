@@ -96,31 +96,31 @@ func newSnapMetricsCollector(snapshotter *Snapshotter) prometheus.Collector {
 		ClusterInfo: prometheus.NewDesc(
 			"semaphore_xds_snapshot_cluster",
 			"Metadata about an xDS cluster",
-			[]string{"type", "name", "lb_policy", "discovery_type"},
+			[]string{"node_id", "type", "name", "lb_policy", "discovery_type"},
 			nil,
 		),
 		ListenerInfo: prometheus.NewDesc(
 			"semaphore_xds_snapshot_listener",
 			"Metadata about an xDS listener",
-			[]string{"type", "name", "route_config"},
+			[]string{"node_id", "type", "name", "route_config"},
 			nil,
 		),
 		EndpointInfo: prometheus.NewDesc(
 			"semaphore_xds_snapshot_endpoint",
 			"Metadata about an xDS cluster load assignment endpoint",
-			[]string{"type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status", "priority"},
+			[]string{"node_id", "type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status", "priority"},
 			nil,
 		),
 		RouteInfo: prometheus.NewDesc(
 			"semaphore_xds_snapshot_route",
 			"Metadata about an xDS route configuration",
-			[]string{"type", "name", "path_prefix", "domains", "virtual_host", "cluster_name"},
+			[]string{"node_id", "type", "name", "path_prefix", "domains", "virtual_host", "cluster_name"},
 			nil,
 		),
 		NodeInfo: prometheus.NewDesc(
 			"semaphore_xds_node_info",
 			"Metadata about a registered node to xDS server",
-			[]string{"nodeID", "address"},
+			[]string{"node_id", "address"},
 			nil,
 		),
 		snapshotter: snapshotter,
@@ -143,28 +143,38 @@ func (c *snapMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *snapMetricsCollector) Collect(ch chan<- prometheus.Metric) {
-	servicesSnap, err := c.snapshotter.ServicesSnapshot(EmptyNodeID)
-	if err != nil {
-		log.Logger.Error("Failed to get services snapshot for metrics collection", "err", err)
-		// TODO: Return an invalid metric?
-		return
+	nmap := c.snapshotter.NodesMap()
+	nodes := make([]string, 0, len(nmap)+1)
+	nodes = append(nodes, EmptyNodeID)
+	for n, _ := range nmap {
+		if n != EmptyNodeID { // be safe to avoid prometheus errors if an empty node id is in the list
+			nodes = append(nodes, n)
+		}
 	}
-	c.collectListenerMetrics(ch, servicesSnap)
-	c.collectRouteMetrics(ch, servicesSnap)
-	c.collectClusterMetrics(ch, servicesSnap)
+	for _, node := range nodes {
+		servicesSnap, err := c.snapshotter.ServicesSnapshot(node)
+		if err != nil {
+			log.Logger.Error("Failed to get services snapshot for metrics collection", "err", err)
+			// TODO: Return an invalid metric?
+			continue
+		}
+		c.collectListenerMetrics(ch, servicesSnap, node)
+		c.collectRouteMetrics(ch, servicesSnap, node)
+		c.collectClusterMetrics(ch, servicesSnap, node)
 
-	endpointsSnap, err := c.snapshotter.EndpointsSnapshot(EmptyNodeID)
-	if err != nil {
-		log.Logger.Error("Failed to get services snapshot for metrics collection", "err", err)
-		// TODO: Return an invalid metric?
-		return
+		endpointsSnap, err := c.snapshotter.EndpointsSnapshot(node)
+		if err != nil {
+			log.Logger.Error("Failed to get endpoints snapshot for metrics collection", "err", err)
+			// TODO: Return an invalid metric?
+			continue
+		}
+		c.collectEndpointsMetrics(ch, endpointsSnap, node)
 	}
-	c.collectEndpointsMetrics(ch, endpointsSnap)
 
 	c.collectNodeMetrics(ch)
 }
 
-func (c *snapMetricsCollector) collectListenerMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
+func (c *snapMetricsCollector) collectListenerMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot, nodeID string) {
 	listeners := snapshot.GetResources(resource.ListenerType)
 	for _, l := range listeners {
 		listener, err := UnmarshalResourceToListener(l)
@@ -182,12 +192,13 @@ func (c *snapMetricsCollector) collectListenerMetrics(ch chan<- prometheus.Metri
 			c.ListenerInfo,
 			prometheus.GaugeValue,
 			1,
-			resource.ListenerType, listener.Name, routeConfigName,
+			//"node_id", "type", "name", "route_config"
+			nodeID, resource.ListenerType, listener.Name, routeConfigName,
 		)
 	}
 }
 
-func (c *snapMetricsCollector) collectRouteMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
+func (c *snapMetricsCollector) collectRouteMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot, nodeID string) {
 	routes := snapshot.GetResources(resource.RouteType)
 	for _, r := range routes {
 		routeConfig, err := UnmarshalResourceToRouteConfiguration(r)
@@ -201,15 +212,15 @@ func (c *snapMetricsCollector) collectRouteMetrics(ch chan<- prometheus.Metric, 
 					c.RouteInfo,
 					prometheus.GaugeValue,
 					1,
-					//"type", "name", "path_prefix", "domains", "virtual_host", "cluster_name"
-					resource.RouteType, routeConfig.Name, route.GetMatch().GetPath(), strings.Join(vhost.Domains, ","), vhost.Name, route.GetRoute().GetCluster(),
+					//"node_id", "type", "name", "path_prefix", "domains", "virtual_host", "cluster_name"
+					nodeID, resource.RouteType, routeConfig.Name, route.GetMatch().GetPath(), strings.Join(vhost.Domains, ","), vhost.Name, route.GetRoute().GetCluster(),
 				)
 			}
 		}
 	}
 }
 
-func (c *snapMetricsCollector) collectClusterMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
+func (c *snapMetricsCollector) collectClusterMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot, nodeID string) {
 	clusters := snapshot.GetResources(resource.ClusterType)
 	for _, cl := range clusters {
 		cluster, err := UnmarshalResourceToCluster(cl)
@@ -221,13 +232,13 @@ func (c *snapMetricsCollector) collectClusterMetrics(ch chan<- prometheus.Metric
 			c.ClusterInfo,
 			prometheus.GaugeValue,
 			1,
-			// "type", "name", "lb_policy", "discovery_type"
-			resource.ClusterType, cluster.Name, ParseClusterLbPolicy(cluster.LbPolicy), ParseClusterDiscoveryType(cluster.GetType()),
+			// "node_id", "type", "name", "lb_policy", "discovery_type"
+			nodeID, resource.ClusterType, cluster.Name, ParseClusterLbPolicy(cluster.LbPolicy), ParseClusterDiscoveryType(cluster.GetType()),
 		)
 	}
 }
 
-func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot) {
+func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metric, snapshot cache.ResourceSnapshot, nodeID string) {
 	endpoints := snapshot.GetResources(resource.EndpointType)
 	for _, e := range endpoints {
 		endpoint, err := UnmarshalResourceToEndpoint(e)
@@ -245,8 +256,8 @@ func (c *snapMetricsCollector) collectEndpointsMetrics(ch chan<- prometheus.Metr
 					c.EndpointInfo,
 					prometheus.GaugeValue,
 					1,
-					// "type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status", "priority"
-					resource.EndpointType, endpoint.ClusterName, lbEndpoints.GetLocality().Zone, lbEndpoints.GetLocality().SubZone, address, healthStatus, priority,
+					// "node_id", "type", "cluster_name", "locality_zone", "locality_subzone", "lb_address", "health_status", "priority"
+					nodeID, resource.EndpointType, endpoint.ClusterName, lbEndpoints.GetLocality().Zone, lbEndpoints.GetLocality().SubZone, address, healthStatus, priority,
 				)
 			}
 		}
@@ -259,7 +270,7 @@ func (c *snapMetricsCollector) collectNodeMetrics(ch chan<- prometheus.Metric) {
 			c.NodeInfo,
 			prometheus.GaugeValue,
 			1,
-			// "nodeID", "address"
+			// "node_id", "address"
 			nodeID, address,
 		)
 	}
