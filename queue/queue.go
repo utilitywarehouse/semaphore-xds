@@ -5,7 +5,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
-	"github.com/utilitywarehouse/semaphore-xds/metrics"
 )
 
 // queueReconcileFunc reconciles the object indicated by the name and namespace
@@ -137,5 +136,5 @@ func (q *Queue) removeRequeued(key string) {
 }
 
 func (q *Queue) updateMetrics() {
-	metrics.SetRequeued(q.name, float64(len(q.requeued)))
+	SetRequeued(q.name, float64(len(q.requeued)))
 }

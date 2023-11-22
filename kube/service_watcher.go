@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/utilitywarehouse/semaphore-xds/log"
-	"github.com/utilitywarehouse/semaphore-xds/metrics"
 )
 
 type ServiceEventHandler = func(eventType watch.EventType, old *v1.Service, new *v1.Service)
@@ -77,8 +76,8 @@ func (sw *ServiceWatcher) Init() {
 }
 
 func (sw *ServiceWatcher) handleEvent(eventType watch.EventType, oldObj, newObj *v1.Service) {
-	metrics.IncKubeWatcherEvents("service", eventType)
-	metrics.SetKubeWatcherObjects("service", float64(len(sw.store.List())))
+	metricIncKubeWatcherEvents("service", eventType)
+	metricSetKubeWatcherObjects("service", float64(len(sw.store.List())))
 
 	if sw.eventHandler != nil {
 		sw.eventHandler(eventType, oldObj, newObj)

@@ -61,17 +61,23 @@ type Snapshotter struct {
 	nodesLock              sync.RWMutex
 }
 
-// Nodes maps a node id to resources to be snapped
-type Nodes map[string]*NodeSnapshotResources
+// Nodes maps a node id to node info (address and resources to be snapped)
+type Nodes map[string]*Node
+
+// Node keeps the info for a node
+type Node struct {
+	address   string
+	resources *NodeSnapshotResources
+}
 
 // NodeSnapshot keeps resources and versions to help snapshotting per node
 type NodeSnapshotResources struct {
-	serviceResources        map[string][]types.Resource
-	serviceResourcesNames   map[string][]string
-	serviceSnapVersion      int32
-	endpointsResources      map[string][]types.Resource
-	endpointsResourcesNames map[string][]string
-	endpointsSnapVersion    int32
+	services             map[string][]types.Resource
+	servicesNames        map[string][]string
+	serviceSnapVersion   int32
+	endpoints            map[string][]types.Resource
+	endpointsNames       map[string][]string
+	endpointsSnapVersion int32
 }
 
 // Maps type urls to services and endpoints for muxCache
@@ -124,6 +130,17 @@ func (s *Snapshotter) EndpointsSnapshot(nodeID string) (cache.ResourceSnapshot, 
 	return s.endpointsCache.GetSnapshot(nodeID)
 }
 
+// NodesMap returns a map of node ids to addresses
+func (s *Snapshotter) NodesMap() map[string]string {
+	s.nodesLock.RLock()
+	defer s.nodesLock.RUnlock()
+	r := make(map[string]string)
+	for nodeID, node := range s.nodes {
+		r[nodeID] = node.address
+	}
+	return r
+}
+
 // SnapServices dumps the list of watched Kubernetes Services into services
 // snapshot
 func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
@@ -144,7 +161,7 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
 	for nodeID, node := range s.nodes {
-		for typeURL, resources := range node.serviceResourcesNames {
+		for typeURL, resources := range node.resources.servicesNames {
 			if err := s.updateNodeServiceSnapshotResources(nodeID, typeURL, resources); err != nil {
 				log.Logger.Error("Failed to update service resources before snapping", "type", typeURL, "node", nodeID, "resources", resources, "error", err)
 			}
@@ -174,7 +191,7 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
 	}
 	for nodeID, node := range s.nodes {
-		for typeURL, resources := range node.endpointsResourcesNames {
+		for typeURL, resources := range node.resources.endpointsNames {
 			if err := s.updateNodeEndpointsSnapshotResources(nodeID, typeURL, resources); err != nil {
 				log.Logger.Error("Failed to update endpoints resources before snapping", "type", typeURL, "node", nodeID, "resources", resources, "error", err)
 			}
@@ -198,6 +215,7 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 		peerAddress:      peerAddr,
 		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
 	}
+	metricOnStreamOpenInc(peerAddr)
 	return nil
 }
 
@@ -205,8 +223,10 @@ func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
 	s.streamsLock.Lock()
 	defer s.streamsLock.Unlock()
+	stream := s.streams[id]
 	delete(s.streams, id)
 	s.deleteNode(node.GetId())
+	metricOnStreamClosedInc(stream.peerAddress)
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
@@ -223,6 +243,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 		"names", strings.Join(r.GetResourceNames(), ", "),
 		"version", r.GetVersionInfo(),
 	)
+	metricOnStreamRequestInc(r.GetNode().GetId(), stream.peerAddress, r.GetTypeUrl())
 	// Verify peer is not exceeding requests rate limit
 	if err := waitForRequestLimit(ctx, stream.requestRateLimit); err != nil {
 		log.Logger.Warn("Peer exceeded rate limit", "error", err, "peer", stream.peerAddress)
@@ -239,7 +260,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 		return nil
 	}
 
-	s.addNewNode(r.GetNode().GetId())
+	s.addNewNode(r.GetNode().GetId(), stream.peerAddress)
 	if s.needToUpdateSnapshot(r.GetNode().GetId(), r.GetTypeUrl(), r.GetResourceNames()) {
 		if err := s.updateNodeSnapshot(r.GetNode().GetId(), r.GetTypeUrl(), r.GetResourceNames()); err != nil {
 			return err
@@ -249,12 +270,16 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 }
 
 func (s *Snapshotter) OnStreamResponse(ctx context.Context, id int64, req *discovery.DiscoveryRequest, resp *discovery.DiscoveryResponse) {
+	s.streamsLock.RLock()
+	stream := s.streams[id]
+	s.streamsLock.RUnlock()
 	log.Logger.Info("OnStreamResponse",
 		"id", id,
 		"type", resp.GetTypeUrl(),
 		"version", resp.GetVersionInfo(),
 		"resources", len(resp.GetResources()),
 	)
+	metricOnStreamResponseInc(req.GetNode().GetId(), stream.peerAddress, resp.GetTypeUrl())
 }
 
 func (s *Snapshotter) OnFetchRequest(ctx context.Context, req *discovery.DiscoveryRequest) error {
@@ -286,18 +311,18 @@ func (s *Snapshotter) OnFetchResponse(req *discovery.DiscoveryRequest, resp *dis
 
 // addNewNode adds a new node with empty resources to the nodes map. It uses the
 // nodeID to determine whether a new addition is needed. Will do nothing for existing nodes
-func (s *Snapshotter) addNewNode(nodeID string) {
+func (s *Snapshotter) addNewNode(nodeID, address string) {
 	s.nodesLock.Lock()
 	defer s.nodesLock.Unlock()
 	if _, ok := s.nodes[nodeID]; !ok {
 		// Node not found, add a new one without any resources
 		log.Logger.Info("Node cache not found, initialising", "node", nodeID)
-		serviceResources := map[string][]types.Resource{
+		services := map[string][]types.Resource{
 			resource.ClusterType:  []types.Resource{},
 			resource.ListenerType: []types.Resource{},
 			resource.RouteType:    []types.Resource{},
 		}
-		serviceResourcesNames := map[string][]string{
+		servicesNames := map[string][]string{
 			resource.ClusterType:  []string{},
 			resource.ListenerType: []string{},
 			resource.RouteType:    []string{},
@@ -305,14 +330,17 @@ func (s *Snapshotter) addNewNode(nodeID string) {
 		enspointsResources := map[string][]types.Resource{
 			resource.EndpointType: []types.Resource{},
 		}
-		endpointsResourcesNames := map[string][]string{
+		endpointsNames := map[string][]string{
 			resource.EndpointType: []string{},
 		}
-		s.nodes[nodeID] = &NodeSnapshotResources{
-			serviceResources:        serviceResources,
-			serviceResourcesNames:   serviceResourcesNames,
-			endpointsResources:      enspointsResources,
-			endpointsResourcesNames: endpointsResourcesNames,
+		s.nodes[nodeID] = &Node{
+			address: address,
+			resources: &NodeSnapshotResources{
+				services:       services,
+				servicesNames:  servicesNames,
+				endpoints:      enspointsResources,
+				endpointsNames: endpointsNames,
+			},
 		}
 	}
 }
@@ -377,8 +405,8 @@ func (s *Snapshotter) updateNodeServiceSnapshotResources(nodeID, typeURL string,
 	if err != nil {
 		return fmt.Errorf("Cannot get resources from cache: %s", err)
 	}
-	node.serviceResources[typeURL] = newSnapResources
-	node.serviceResourcesNames[typeURL] = resources
+	node.resources.services[typeURL] = newSnapResources
+	node.resources.servicesNames[typeURL] = resources
 	s.nodes[nodeID] = node
 	return nil
 }
@@ -396,8 +424,8 @@ func (s *Snapshotter) updateNodeEndpointsSnapshotResources(nodeID, typeURL strin
 	if err != nil {
 		return fmt.Errorf("Cannot get resources from cache: %s", err)
 	}
-	node.endpointsResources[typeURL] = newSnapResources
-	node.endpointsResourcesNames[typeURL] = resources
+	node.resources.endpoints[typeURL] = newSnapResources
+	node.resources.endpointsNames[typeURL] = resources
 	s.nodes[nodeID] = node
 	return nil
 }
@@ -411,8 +439,8 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 		return fmt.Errorf("Cannot create a new snapshot, node: %s not found", nodeID)
 	}
 	s.nodesLock.RUnlock()
-	atomic.AddInt32(&node.serviceSnapVersion, 1)
-	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.serviceSnapVersion), node.serviceResources)
+	atomic.AddInt32(&node.resources.serviceSnapVersion, 1)
+	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.resources.serviceSnapVersion), node.resources.services)
 	if err != nil {
 		return err
 	}
@@ -428,8 +456,8 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 		return fmt.Errorf("Cannot create a new snapshot, node: %s not found", nodeID)
 	}
 	s.nodesLock.RUnlock()
-	atomic.AddInt32(&node.endpointsSnapVersion, 1)
-	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.endpointsSnapVersion), node.endpointsResources)
+	atomic.AddInt32(&node.resources.endpointsSnapVersion, 1)
+	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.resources.endpointsSnapVersion), node.resources.endpoints)
 	if err != nil {
 		return err
 	}
@@ -464,10 +492,10 @@ func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, resources []s
 	}
 	s.nodesLock.RUnlock()
 	if mapTypeURL(typeURL) == "services" {
-		return !resourcesMatch(node.serviceResourcesNames[typeURL], resources)
+		return !resourcesMatch(node.resources.servicesNames[typeURL], resources)
 	}
 	if mapTypeURL(typeURL) == "endpoints" {
-		return !resourcesMatch(node.endpointsResourcesNames[typeURL], resources)
+		return !resourcesMatch(node.resources.endpointsNames[typeURL], resources)
 	}
 	return false
 }
