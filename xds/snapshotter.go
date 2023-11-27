@@ -57,6 +57,7 @@ type Snapshotter struct {
 	streamRequestPerSecond float64       // maximum number of requests per stream per second
 	streams                sync.Map      // map of open streams
 	nodes                  sync.Map      // maps all clients node ids to requested resources that will be snapshotted and served
+	snapNodesMu            sync.Mutex    // Simple lock to avoid deleting a node while snapshotting
 }
 
 // Node keeps the info for a node
@@ -152,6 +153,8 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(Node)
@@ -185,6 +188,8 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
 	}
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(Node)
@@ -220,7 +225,7 @@ func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 	st, _ := s.streams.Load(id)
 	stream := st.(Stream)
 	s.streams.Delete(id)
-	s.deleteNode(node.GetId())
+	go s.deleteNode(node.GetId())
 	metricOnStreamClosedInc(stream.peerAddress)
 }
 
@@ -341,6 +346,8 @@ func (s *Snapshotter) deleteNode(nodeID string) {
 	if nodeID == EmptyNodeID {
 		return
 	}
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	s.nodes.Delete(nodeID)
 	s.servicesCache.ClearSnapshot(nodeID)
 	s.endpointsCache.ClearSnapshot(nodeID)
