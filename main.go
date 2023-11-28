@@ -23,8 +23,8 @@ var (
 	flagLabelSelector            = flag.String("label-selector", getEnv("SXDS_LABEL_SELECTOR", "xds.semaphore.uw.systems/enabled=true"), "Label selector for watched kubernetes resources")
 	flagLbPolicyLabel            = flag.String("lb-policy-selector", getEnv("SXDS_LB_POLICY_SELECTOR", "xds.semaphore.uw.systems/lb-policy"), "Label to allow user to configure the lb policy for a Service clusters")
 	flagServerListenPort         = flag.Uint("server-listen-port", 18000, "xDS server listen port")
-	flagMaxRequestsPerSecond     = flag.Float64("max-requests-per-second", 100.0, "maximum allowed requests to the server per second")
-	flagMaxPeerRequestsPerSecond = flag.Float64("max-peer-requests-per-second", 10.0, "maximum allowed requests from a peer per second")
+	flagMaxRequestsPerSecond     = flag.Float64("max-requests-per-second", 300.0, "maximum allowed requests to the server per second")
+	flagMaxPeerRequestsPerSecond = flag.Float64("max-peer-requests-per-second", 30.0, "maximum allowed requests from a peer per second")
 	flagMetricsListenPort        = flag.String("metrics-listen-port", "8080", "Listen port to serve prometheus metrics")
 
 	bearerRe = regexp.MustCompile(`[A-Z|a-z0-9\-\._~\+\/]+=*`)
