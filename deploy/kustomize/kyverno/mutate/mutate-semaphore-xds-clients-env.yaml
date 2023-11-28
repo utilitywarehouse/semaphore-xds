@@ -31,13 +31,18 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: metadata.name
-              - name: POD_NAMESPACE
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.namespace
               - name: GRPC_XDS_BOOTSTRAP_CONFIG
                 value: >-
-                  {"xds_servers": [{"server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000", "channel_creds": [{"type": "insecure"}], "server_features": ["xds_v3"]}], "node":{"id":"\$(POD_NAME)-\$(POD_NAMESPACE)", "Locality":{}}}
+                  {
+                    "xds_servers": [{
+                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+                      "channel_creds": [{"type": "insecure"}],
+                      "server_features": ["xds_v3"]}
+                    ],
+                    "node":{
+                      "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
+                      "Locality":{}}
+                  }
           containers:
             - (name): "*"
               env:
@@ -45,10 +50,15 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: metadata.name
-              - name: POD_NAMESPACE
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.namespace
               - name: GRPC_XDS_BOOTSTRAP_CONFIG
                 value: >- 
-                  {"xds_servers": [{"server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000", "channel_creds": [{"type": "insecure"}], "server_features": ["xds_v3"]}], "node":{"id":"\$(POD_NAME)-\$(POD_NAMESPACE)", "locality":{}}}
+                  {
+                    "xds_servers": [{
+                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+                      "channel_creds": [{"type": "insecure"}],
+                      "server_features": ["xds_v3"]}
+                    ],
+                    "node":{
+                      "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
+                      "Locality":{}}
+                  }
