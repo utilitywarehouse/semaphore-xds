@@ -255,7 +255,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 	}
 	// Legacy empty nodeID client
 	if r.GetNode().GetId() == EmptyNodeID {
-		log.Logger.Warn("Client using empty string as node id", "client", stream.peerAddress)
+		log.Logger.Info("Client using empty string as node id", "client", stream.peerAddress)
 		return nil
 	}
 
