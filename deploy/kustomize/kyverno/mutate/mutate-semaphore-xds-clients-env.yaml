@@ -41,7 +41,7 @@ spec:
                     ],
                     "node":{
                       "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
-                      "Locality":{}}
+                      "locality":{}}
                   }
           containers:
             - (name): "*"
@@ -60,5 +60,5 @@ spec:
                     ],
                     "node":{
                       "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
-                      "Locality":{}}
+                      "locality":{}}
                   }
