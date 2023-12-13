@@ -19,6 +19,8 @@ spec:
       resources:
         kinds:
         - Pod
+        operations:
+        - CREATE
         selector:
           matchLabels:
             xds.semaphore.uw.systems/client: "true"
