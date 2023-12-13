@@ -12,6 +12,7 @@ metadata:
       environment variable.
 spec:
   background: false
+  mutateExistingOnPolicyUpdate: false
   rules:
   - name: xds-clients-inject-env
     match:
