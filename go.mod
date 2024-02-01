@@ -3,7 +3,7 @@ module github.com/utilitywarehouse/semaphore-xds
 go 1.21
 
 require (
-	github.com/envoyproxy/go-control-plane v0.11.1
+	github.com/envoyproxy/go-control-plane v0.12.0
 	github.com/golang/protobuf v1.5.3
 	github.com/hashicorp/go-hclog v1.6.2
 	github.com/mdlayher/promtest v0.0.0-20210824143500-998bde29eaa8
