@@ -24,6 +24,8 @@ import (
 type Service struct {
 	EnableRemoteEndpoints    bool
 	Policy                   clusterv3.Cluster_LbPolicy
+	RingHash                 *clusterv3.Cluster_RingHashLbConfig
+	RingHashPolicies         []*routev3.RouteAction_HashPolicy
 	PrioritizeLocalEndpoints bool
 	Service                  *v1.Service
 	Retry                    *routev3.RetryPolicy
@@ -80,24 +82,10 @@ func (s *xdsServiceStoreWrapper) key(service, namespace string) string {
 	return fmt.Sprintf("%s.%s", service, namespace)
 }
 
-func makeRouteConfig(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy, retry *routev3.RetryPolicy) *routev3.RouteConfiguration {
+func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
 	routeName := makeRouteConfigName(name, namespace, port)
 	clusterName := makeClusterName(name, namespace, port)
 	virtualHostName := makeVirtualHostName(name, namespace, port)
-
-	var hashPolicy []*routev3.RouteAction_HashPolicy
-	if policy == clusterv3.Cluster_RING_HASH {
-		// FIXME: pass in configuration from XdsService
-		hashPolicy = make([]*routev3.RouteAction_HashPolicy, 0, 1)
-		// loop over each header
-		hashPolicy = append(hashPolicy, &routev3.RouteAction_HashPolicy{
-			PolicySpecifier: &routev3.RouteAction_HashPolicy_Header_{
-				Header: &routev3.RouteAction_HashPolicy_Header{
-					HeaderName: "some-header",
-				},
-			},
-		})
-	}
 
 	return &routev3.RouteConfiguration{
 		Name: routeName,
@@ -116,7 +104,7 @@ func makeRouteConfig(name, namespace string, port int32, policy clusterv3.Cluste
 							ClusterSpecifier: &routev3.RouteAction_Cluster{
 								Cluster: clusterName,
 							},
-							HashPolicy: hashPolicy,
+							HashPolicy: hashPolicies,
 						},
 					},
 				}},
@@ -152,7 +140,7 @@ func makeListener(name, namespace string, port int32, manager *anypb.Any) *liste
 	}
 }
 
-func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy) *clusterv3.Cluster {
+func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy, ringHash *clusterv3.Cluster_RingHashLbConfig) *clusterv3.Cluster {
 	clusterName := makeClusterName(name, namespace, port)
 	cluster := &clusterv3.Cluster{
 		Name:                 clusterName,
@@ -169,12 +157,8 @@ func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_Lb
 
 	switch policy {
 	case clusterv3.Cluster_RING_HASH:
-		ringCfg := &clusterv3.Cluster_RingHashLbConfig{}
-		// FIXME: pass in configuration from XdsService
-		// ringCfg.MinimumRingSize = wrapperspb.UInt64(1024)
-		// ringCfg.MaximumRingSize = wrapperspb.UInt64(8_000_000)
 		cluster.LbConfig = &clusterv3.Cluster_RingHashLbConfig_{
-			RingHashLbConfig: ringCfg,
+			RingHashLbConfig: ringHash,
 		}
 	}
 
@@ -189,7 +173,7 @@ func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []type
 	var lsnr []types.Resource
 	for _, s := range serviceStore.All() {
 		for _, port := range s.Service.Spec.Ports {
-			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port, s.Policy, s.Retry)
+			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port, s.Retry, s.RingHashPolicies)
 			rds = append(rds, routeConfig)
 			manager, err := makeManager(routeConfig)
 			if err != nil {
@@ -198,7 +182,7 @@ func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []type
 			}
 			listener := makeListener(s.Service.Name, s.Service.Namespace, port.Port, manager)
 			lsnr = append(lsnr, listener)
-			cluster := makeCluster(s.Service.Name, s.Service.Namespace, port.Port, s.Policy)
+			cluster := makeCluster(s.Service.Name, s.Service.Namespace, port.Port, s.Policy, s.RingHash)
 			cls = append(cls, cluster)
 		}
 	}

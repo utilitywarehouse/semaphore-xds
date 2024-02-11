@@ -6,6 +6,7 @@ import (
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
@@ -206,14 +207,14 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 			continue
 		}
 		policy := xds.ParseToClusterLbPolicy(xdsSvc.Spec.LoadBalancing.Policy)
-		prioStrategy := xds.ParsePriorityStrategy(xdsSvc.Spec.PriorityStrategy)
-		retryPolicy := extractRetryPolicy(xdsSvc.Spec.Retry)
 
 		store.AddOrUpdate(svc, xds.Service{
 			EnableRemoteEndpoints:    pointer.BoolDeref(xdsSvc.Spec.EnableRemoteEndpoints, false),
 			Policy:                   policy,
-			PrioritizeLocalEndpoints: xds.PrioritizeLocal(prioStrategy),
-			Retry:                    retryPolicy,
+			RingHash:                 extractRingHashConfig(policy, xdsSvc.Spec.LoadBalancing.RingHash),
+			RingHashPolicies:         extractRingHashPolicies(policy, xdsSvc.Spec.LoadBalancing.RingHash),
+			PrioritizeLocalEndpoints: xds.PrioritizeLocal(xds.ParsePriorityStrategy(xdsSvc.Spec.PriorityStrategy)),
+			Retry:                    extractRetryPolicy(xdsSvc.Spec.Retry),
 		})
 	}
 
@@ -289,6 +290,48 @@ func extractClusterLbPolicyFromServiceLabel(service *v1.Service) clusterv3.Clust
 		return clusterv3.Cluster_ROUND_ROBIN
 	}
 	return xds.ParseToClusterLbPolicy(lbPolicyRaw)
+}
+
+func extractRingHashConfig(policy clusterv3.Cluster_LbPolicy, rh *v1alpha1.XdsServiceSpecLoadBalancingRingHash) *clusterv3.Cluster_RingHashLbConfig {
+	if policy != clusterv3.Cluster_RING_HASH {
+		return nil
+	}
+	if rh == nil {
+		return nil
+	}
+
+	cfg := &clusterv3.Cluster_RingHashLbConfig{}
+	if rh.MinimumRingSize != nil {
+		cfg.MinimumRingSize = wrapperspb.UInt64(*rh.MinimumRingSize)
+	}
+	if rh.MaximumRingSize != nil {
+		cfg.MaximumRingSize = wrapperspb.UInt64(*rh.MaximumRingSize)
+	}
+	return cfg
+}
+
+func extractRingHashPolicies(policy clusterv3.Cluster_LbPolicy, rh *v1alpha1.XdsServiceSpecLoadBalancingRingHash) []*routev3.RouteAction_HashPolicy {
+	if policy != clusterv3.Cluster_RING_HASH {
+		return nil
+	}
+	if rh == nil {
+		return nil
+	}
+	if len(rh.Headers) == 0 {
+		return nil
+	}
+
+	policies := make([]*routev3.RouteAction_HashPolicy, 0, len(rh.Headers))
+	for _, header := range rh.Headers {
+		policies = append(policies, &routev3.RouteAction_HashPolicy{
+			PolicySpecifier: &routev3.RouteAction_HashPolicy_Header_{
+				Header: &routev3.RouteAction_HashPolicy_Header{
+					HeaderName: header,
+				},
+			},
+		})
+	}
+	return policies
 }
 
 func extractRetryPolicy(policy *v1alpha1.XdsServiceSpecRetry) *routev3.RetryPolicy {
