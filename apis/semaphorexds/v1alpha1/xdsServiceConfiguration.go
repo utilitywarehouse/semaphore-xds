@@ -20,6 +20,25 @@ type XdsServiceSpecLoadBalancing struct {
 	// +optional
 	// +kubebuilder:default=round_robin
 	Policy string `json:"policy,omitempty"`
+	// RingHash configures the ring hash when the policy is set to ring_hash
+	// +optional
+	RingHash *XdsServiceSpecLoadBalancingRingHash `json:"ringHash,omitempty"`
+}
+
+// XdsServiceSpecLoadBalancingRingHash configures the ring hash load balancing policy
+type XdsServiceSpecLoadBalancingRingHash struct {
+	// Minimum hash ring size. The larger the ring is the better the request distribution
+	// will reflect the desired weights.
+	// +optional
+	MinimumRingSize *uint64 `json:"minimumRingSize,omitempty"`
+	// Maximum hash ring size. Limited to 8M entries, but can be lowered
+	// to further constrain resource use.
+	// +optional
+	MaximumRingSize *uint64 `json:"maximumRingSize,omitempty"`
+	// Request headers that will be used to obtain the hash key.
+	// If the header is not present, no hash will be produced.
+	// +optional
+	Headers []string `json:"headers,omitempty"`
 }
 
 // XdsServiceSpecRetryBackoffPolicy defines the exponential backoff policy for a service.
