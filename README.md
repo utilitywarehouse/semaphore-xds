@@ -91,8 +91,8 @@ spec:
   loadBalancing:
     policy: ring_hash
     ringHash:
-      minimumRingSize: 1024
-      maximumRingSize: 8000000
+      minimumRingSize: 1024 # Optional
+      maximumRingSize: 8000000 # Optional
       headers:
         - some-header
         - another-header
