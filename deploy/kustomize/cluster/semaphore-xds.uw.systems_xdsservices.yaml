@@ -73,6 +73,29 @@ spec:
                     description: Policy is the name of the load balancing policy to
                       be used
                     type: string
+                  ringHash:
+                    description: RingHash configures the ring hash when the policy
+                      is set to ring_hash
+                    properties:
+                      headers:
+                        description: Request headers that will be used to obtain the
+                          hash key. If the header is not present, no hash will be
+                          produced.
+                        items:
+                          type: string
+                        type: array
+                      maximumRingSize:
+                        description: Maximum hash ring size. Limited to 8M entries,
+                          but can be lowered to further constrain resource use.
+                        format: int64
+                        type: integer
+                      minimumRingSize:
+                        description: Minimum hash ring size. The larger the ring is
+                          the better the request distribution will reflect the desired
+                          weights.
+                        format: int64
+                        type: integer
+                    type: object
                 type: object
               priorityStrategy:
                 default: none
