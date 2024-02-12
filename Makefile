@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 CODEGEN_IMAGE := kubernetes-codegen:latest
 CURRENT_DIR := $(shell pwd)
-KUBE_CODE_GEN_VERSION := v0.26.0
+KUBE_CODE_GEN_VERSION := v0.29.1
 PROJECT_MODULE := github.com/utilitywarehouse/semaphore-xds
 UID := $(shell id -u)
 GID := $(shell id -g)
