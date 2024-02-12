@@ -2,11 +2,18 @@ apiVersion: semaphore-xds.uw.systems/v1alpha1
 kind: XdsService
 metadata:
   name: grpc-echo-server
+  namespace: labs
 spec:
   service:
     name: grpc-echo-server
   loadBalancing:
     policy: ring_hash
+    ringHash:
+      minimumRingSize: 5152
+      maximumRingSize: 8393
+      headers:
+        - some-header
+        - another-header
 ---
 apiVersion: v1
 kind: Service

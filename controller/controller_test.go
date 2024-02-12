@@ -692,3 +692,72 @@ func TestReconcileLocalEndpointSlices_XdsServiceWithEmptyLocalEndpoints(t *testi
 		assert.Equal(t, uint32(0), eds.Endpoints[1].Priority)
 	}
 }
+
+func TestReconcileServices_XdsServiceWithRingHash(t *testing.T) {
+	expectedHeaders := []string{"some-header", "another-header"}
+
+	client := kube.NewClientMock(
+		"./test-resources/xds_service_ring_hash_balancing.yaml",
+		"./test-resources/endpointslice.yaml",
+	)
+	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	controller := NewController(
+		client,
+		[]kube.Client{},
+		"",
+		testLabelSelector,
+		snapshotter,
+		0,
+	)
+	controller.Run()
+	defer controller.Stop()
+
+	// Reconciling any service should trigger a full snap, since this is only to be called on XdsService or labelled Service Updates
+	controller.reconcileServices("foo", "bar")
+
+	// Verify that our snapshot will have a single listener, route and
+	// cluster
+	snap, err := snapshotter.ServicesSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify ring hash config
+	for _, cl := range snap.GetResources(resource.ClusterType) {
+		cluster, err := xds.UnmarshalResourceToCluster(cl)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, clusterv3.Cluster_RING_HASH, cluster.LbPolicy)
+
+		ringHashCfg := cluster.GetRingHashLbConfig()
+		if ringHashCfg == nil {
+			t.Fatal("ring hash config is nil")
+		}
+		assert.Equal(t, uint64(5152), ringHashCfg.MinimumRingSize.Value)
+		assert.Equal(t, uint64(8393), ringHashCfg.MaximumRingSize.Value)
+	}
+
+	for _, rc := range snap.GetResources(resource.RouteType) {
+		routeCfg, err := xds.UnmarshalResourceToRouteConfiguration(rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, host := range routeCfg.GetVirtualHosts() {
+			for _, route := range host.GetRoutes() {
+				routeAction := route.GetRoute()
+				if routeAction == nil {
+					t.Fatal("route action is nil")
+				}
+
+				var seenHeaders []string
+				for _, hashPolicy := range routeAction.GetHashPolicy() {
+					seenHeaders = append(seenHeaders, hashPolicy.GetHeader().GetHeaderName())
+				}
+				assert.ElementsMatch(t, expectedHeaders, seenHeaders)
+			}
+		}
+	}
+}

@@ -24,6 +24,8 @@ import (
 type Service struct {
 	EnableRemoteEndpoints    bool
 	Policy                   clusterv3.Cluster_LbPolicy
+	RingHash                 *clusterv3.Cluster_RingHashLbConfig
+	RingHashPolicies         []*routev3.RouteAction_HashPolicy
 	PrioritizeLocalEndpoints bool
 	Service                  *v1.Service
 	Retry                    *routev3.RetryPolicy
@@ -80,7 +82,7 @@ func (s *xdsServiceStoreWrapper) key(service, namespace string) string {
 	return fmt.Sprintf("%s.%s", service, namespace)
 }
 
-func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPolicy) *routev3.RouteConfiguration {
+func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
 	routeName := makeRouteConfigName(name, namespace, port)
 	clusterName := makeClusterName(name, namespace, port)
 	virtualHostName := makeVirtualHostName(name, namespace, port)
@@ -102,6 +104,7 @@ func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPol
 							ClusterSpecifier: &routev3.RouteAction_Cluster{
 								Cluster: clusterName,
 							},
+							HashPolicy: hashPolicies,
 						},
 					},
 				}},
@@ -137,9 +140,9 @@ func makeListener(name, namespace string, port int32, manager *anypb.Any) *liste
 	}
 }
 
-func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy) *clusterv3.Cluster {
+func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy, ringHash *clusterv3.Cluster_RingHashLbConfig) *clusterv3.Cluster {
 	clusterName := makeClusterName(name, namespace, port)
-	return &clusterv3.Cluster{
+	cluster := &clusterv3.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
 		LbPolicy:             policy,
@@ -151,6 +154,15 @@ func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_Lb
 			},
 		},
 	}
+
+	switch policy {
+	case clusterv3.Cluster_RING_HASH:
+		cluster.LbConfig = &clusterv3.Cluster_RingHashLbConfig_{
+			RingHashLbConfig: ringHash,
+		}
+	}
+
+	return cluster
 }
 
 // servicesToResources will return a set of listener, routeConfiguration and
@@ -161,7 +173,7 @@ func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []type
 	var lsnr []types.Resource
 	for _, s := range serviceStore.All() {
 		for _, port := range s.Service.Spec.Ports {
-			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port, s.Retry)
+			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port, s.Retry, s.RingHashPolicies)
 			rds = append(rds, routeConfig)
 			manager, err := makeManager(routeConfig)
 			if err != nil {
@@ -170,7 +182,7 @@ func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []type
 			}
 			listener := makeListener(s.Service.Name, s.Service.Namespace, port.Port, manager)
 			lsnr = append(lsnr, listener)
-			cluster := makeCluster(s.Service.Name, s.Service.Namespace, port.Port, s.Policy)
+			cluster := makeCluster(s.Service.Name, s.Service.Namespace, port.Port, s.Policy, s.RingHash)
 			cls = append(cls, cluster)
 		}
 	}

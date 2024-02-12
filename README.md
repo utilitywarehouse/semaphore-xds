@@ -74,6 +74,30 @@ policies](https://pkg.go.dev/github.com/envoyproxy/go-control-plane/envoy/config
 If none is set, or an invalid value is passed, the server configuration will
 default to round robin.
 
+*ring_hash:*
+
+Routes requests based upon a consistent hashring based on the configuration of `ringHash` below.
+Using xxhash, each header is searched for on the request, if found it's hashed and mapped to
+a slot within the hashring.
+
+```
+apiVersion: semaphore-xds.uw.systems/v1alpha1
+kind: XdsService
+metadata:
+  name: foo
+spec:
+  service:
+    name: <service-name>
+  loadBalancing:
+    policy: ring_hash
+    ringHash:
+      minimumRingSize: 1024 # Optional
+      maximumRingSize: 8000000 # Optional
+      headers:
+        - some-header
+        - another-header
+```
+
 ### Retry policy
 
 `retryOn` must be set with at least one value in order for the rest of the policy to be served, else the whole policy will be ignored.
