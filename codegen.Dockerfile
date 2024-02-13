@@ -17,6 +17,7 @@ RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0
 
 RUN mkdir -p $GOPATH/src/k8s.io/code-generator
 RUN cp -R $GOPATH/pkg/mod/k8s.io/code-generator@$KUBE_VERSION/* $GOPATH/src/k8s.io/code-generator/
-RUN chmod +x $GOPATH/src/k8s.io/code-generator/generate-groups.sh
+RUN chmod +x $GOPATH/src/k8s.io/code-generator/kube_codegen.sh
+RUN chmod +x $GOPATH/src/k8s.io/code-generator/generate-internal-groups.sh
 
 WORKDIR $GOPATH/src/k8s.io/code-generator
