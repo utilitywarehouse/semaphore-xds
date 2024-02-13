@@ -30,7 +30,7 @@ generate-clientset-code: codegen-build
 		-v "${CURRENT_DIR}:/go/src/${PROJECT_MODULE}" \
 		-w "/go/src/${PROJECT_MODULE}" \
 		"${CODEGEN_IMAGE}" \
-		/go/src/k8s.io/code-generator/generate-groups.sh all ${PROJECT_MODULE}/apis/generated ${PROJECT_MODULE}/apis semaphorexds:v1alpha1 --go-header-file=/go/src/${PROJECT_MODULE}/boilerplate.go.tmpl
+		/go/src/k8s.io/code-generator/kube_codegen.sh client,deepcopy,informer,lister ${PROJECT_MODULE}/apis/generated ${PROJECT_MODULE}/apis semaphorexds:v1alpha1 --go-header-file=/go/src/${PROJECT_MODULE}/boilerplate.go.tmpl
 
 generate-deepcopy-funcs: codegen-build
 	docker run --rm \
