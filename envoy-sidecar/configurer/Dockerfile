@@ -9,4 +9,5 @@ RUN \
 
 FROM alpine:3.18
 COPY --from=build /semaphore-xds-envoy-configurer /semaphore-xds-envoy-configurer
+COPY --from=build /go/src/github.com/utilitywarehouse/semaphore-xds/envoy-sidecar/configurer/templates /templates
 ENTRYPOINT [ "/semaphore-xds-envoy-configurer" ]
