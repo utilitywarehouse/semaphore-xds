@@ -24,7 +24,7 @@ func main() {
 	}
 	log.Println("Looking up service %s", *flagGrpcServerAddress)
 
-	address := fmt.Sprintf("xds:///" + *flagGrpcServerAddress)
+	address := fmt.Sprintf(*flagGrpcServerAddress)
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Could not connect %v", err)
