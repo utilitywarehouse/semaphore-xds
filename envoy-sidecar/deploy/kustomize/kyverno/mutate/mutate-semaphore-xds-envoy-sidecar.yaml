@@ -1,0 +1,68 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-semaphore-xds-envoy-sidecar
+  annotations:
+    policies.kyverno.io/title: Mutate Sempaphore-xDS Envoy Sidecar
+    policies.kyverno.io/category: xDS
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy ensures that pods labelled with
+      xds.semaphore.uw.systems/envoy-sidecar: "true" are injected with the init
+      container and the sidecar needed to use envoy to proxy grpc connections
+      to targets specified by xds.semaphore.uw.systems/envoy-sidecar-targets
+      annotation.
+spec:
+  background: false
+  mutateExistingOnPolicyUpdate: false
+  rules:
+  - name: xds-clients-inject-envoy-sidecar
+    match:
+      resources:
+        kinds:
+        - Pod
+        operations:
+        - CREATE
+        selector:
+          matchLabels:
+            xds.semaphore.uw.systems/envoy-sidecar: "true"
+    mutate:
+      patchStrategicMerge:
+        spec:
+          initContainers:
+            - name: envoy-configurer
+              image: quay.io/utilitywarehouse/semaphore-xds/envoy-sidecar/configurer:envoy-sidecar
+              imagePullPolicy: Always
+              env:
+                - name: ENVOY_NODE_ID
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: ENVOY_SIDECAR_TARGETS
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['xds.semaphore.uw.systems/envoy-sidecar-targets']
+                - name: XDS_SERVER_ADDRESS
+                  value: semaphore-xds.sys-semaphore.svc.cluster.local
+                - name: XDS_SERVER_PORT
+                  value: "18000"
+              command:
+              - /bin/sh
+              - -c
+              - |
+                /semaphore-xds-envoy-configurer > /etc/envoy/config.yaml
+              volumeMounts:
+                - name: envoy-config
+                  mountPath: /etc/envoy
+          containers:
+            - name: envoy-sidecar
+              image: envoyproxy/envoy:v1.29.1
+              imagePullPolicy: Always
+              args:
+                - -c /etc/envoy/config.yaml
+              volumeMounts:
+                - name: envoy-config
+                  mountPath: /etc/envoy
+          volumes:
+            - name: envoy-config
+              emptyDir: {}
