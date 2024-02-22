@@ -1,0 +1,12 @@
+admin:
+  address:
+    socket_address: { address: 127.0.0.1, port_value: 9901 }
+node:
+  id: {{ .NodeID }}
+  cluster: {{ .ClusterID }}
+static_resources:
+  listeners:
+{{- .Listeners }}
+  clusters:
+{{- .Clusters }}
+{{- .XdsCluster }}

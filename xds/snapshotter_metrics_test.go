@@ -76,8 +76,8 @@ func TestSnapMetricsCollector(t *testing.T) {
 		expectHttpsRouteName    = "foo.bar:443"
 		expectHttpVhost         = "foo.bar:80"
 		expectHttpsVhost        = "foo.bar:443"
-		expectHttpDomains       = "foo.bar:80"
-		expectHttpsDomains      = "foo.bar:443"
+		expectHttpDomains       = "foo.bar:80,127.0.0.1:*"
+		expectHttpsDomains      = "foo.bar:443,127.0.0.1:*"
 		expectHttpClusterName   = "foo.bar.80"
 		expectHttpsClusterName  = "foo.bar.443"
 	)

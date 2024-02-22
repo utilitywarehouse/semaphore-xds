@@ -1,0 +1,27 @@
+{{- range . }}
+  - name: {{ .Name }}
+    address:
+      socket_address: { address: 127.0.0.1, port_value: {{ .LocalListenerPort}} }
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          codec_type: AUTO
+          rds:
+            route_config_name: {{ .RouteConfigName }}
+            config_source:
+              resource_api_version: V3
+              api_config_source:
+                api_type: GRPC
+                transport_api_version: V3
+                grpc_services:
+                - envoy_grpc:
+                    cluster_name: xds_cluster
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              dynamic_stats: true
+{{- end }}

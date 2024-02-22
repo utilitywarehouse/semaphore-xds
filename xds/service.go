@@ -92,7 +92,7 @@ func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPol
 		VirtualHosts: []*routev3.VirtualHost{
 			{
 				Name:    virtualHostName,
-				Domains: []string{makeGlobalServiceDomain(name, namespace, port)},
+				Domains: []string{makeGlobalServiceDomain(name, namespace, port), "127.0.0.1:*"}, // All all localhost domains as well for envoy sidecars
 				Routes: []*routev3.Route{{
 					Match: &routev3.RouteMatch{
 						PathSpecifier: &routev3.RouteMatch_Prefix{
