@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: xdsservices.semaphore-xds.uw.systems
 spec:
   group: semaphore-xds.uw.systems
@@ -36,20 +35,26 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: XdsService is the Schema for the XdsService of semaphore-xds
-          controller. An XdsService is defined as the configuration used to construct
-          a service that is served via the xDS server implemented by semaphore-xds
-          to load balance traffic to GRPC endpoints.
+        description: |-
+          XdsService is the Schema for the XdsService of semaphore-xds controller. An
+          XdsService is defined as the configuration used to construct a service that
+          is served via the xDS server implemented by semaphore-xds to load balance
+          traffic to GRPC endpoints.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -59,14 +64,16 @@ spec:
             properties:
               enableRemoteEndpoints:
                 default: false
-                description: EnableRemoteEndpoints determines whether this Service
-                  should look for endpoints (EndpointSlices) in remote clusters.
+                description: |-
+                  EnableRemoteEndpoints determines whether this Service should look for
+                  endpoints (EndpointSlices) in remote clusters.
                 type: boolean
               loadBalancing:
                 default:
                   policy: round_robin
-                description: LoadBalancing specidies the load balancer configuration
-                  to be passed to xDS clients.
+                description: |-
+                  LoadBalancing specidies the load balancer configuration to be passed
+                  to xDS clients.
                 properties:
                   policy:
                     default: round_robin
@@ -78,30 +85,31 @@ spec:
                       is set to ring_hash
                     properties:
                       headers:
-                        description: Request headers that will be used to obtain the
-                          hash key. If the header is not present, no hash will be
-                          produced.
+                        description: |-
+                          Request headers that will be used to obtain the hash key.
+                          If the header is not present, no hash will be produced.
                         items:
                           type: string
                         type: array
                       maximumRingSize:
-                        description: Maximum hash ring size. Limited to 8M entries,
-                          but can be lowered to further constrain resource use.
+                        description: |-
+                          Maximum hash ring size. Limited to 8M entries, but can be lowered
+                          to further constrain resource use.
                         format: int64
                         type: integer
                       minimumRingSize:
-                        description: Minimum hash ring size. The larger the ring is
-                          the better the request distribution will reflect the desired
-                          weights.
+                        description: |-
+                          Minimum hash ring size. The larger the ring is the better the request distribution
+                          will reflect the desired weights.
                         format: int64
                         type: integer
                     type: object
                 type: object
               priorityStrategy:
                 default: none
-                description: PriorityStrategy determines the strategy to follow when
-                  assigning priorities to endpoints. Possible values are `none` and
-                  `local-first`
+                description: |-
+                  PriorityStrategy determines the strategy to follow when assigning
+                  priorities to endpoints. Possible values are `none` and `local-first`
                 enum:
                 - none
                 - local-first
@@ -131,8 +139,9 @@ spec:
                     format: int32
                     type: integer
                   retryOn:
-                    description: Specifies the conditions under which retry takes
-                      place. By default this is empty, which means retries are disabled.
+                    description: |-
+                      Specifies the conditions under which retry takes place.
+                      By default this is empty, which means retries are disabled.
                     items:
                       type: string
                     type: array
@@ -155,9 +164,3 @@ spec:
     served: true
     storage: true
     subresources: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
