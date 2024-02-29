@@ -3,6 +3,7 @@ SHELL := /bin/bash
 CODEGEN_IMAGE := kubernetes-codegen:latest
 CURRENT_DIR := $(shell pwd)
 KUBE_CODE_GEN_VERSION := v0.29.1
+KUBE_CONTROLLER_TOOLS_VERSION := v0.14.0
 PROJECT_MODULE := github.com/utilitywarehouse/semaphore-xds
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -18,6 +19,7 @@ release:
 
 codegen-build:
 	docker build --build-arg KUBE_VERSION=${KUBE_CODE_GEN_VERSION} \
+		--build-arg CONTROLLER_TOOLS_VERSION=${KUBE_CONTROLLER_TOOLS_VERSION} \
 		--build-arg USER="${USER}" \
 		--build-arg UID="${UID}" \
 		--build-arg GID="${GID}" \
