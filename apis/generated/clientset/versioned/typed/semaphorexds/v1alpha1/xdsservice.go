@@ -28,8 +28,11 @@ package v1alpha1
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 	"time"
 
+	semaphorexdsv1alpha1 "github.com/utilitywarehouse/semaphore-xds/apis/generated/applyconfiguration/semaphorexds/v1alpha1"
 	scheme "github.com/utilitywarehouse/semaphore-xds/apis/generated/clientset/versioned/scheme"
 	v1alpha1 "github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,6 +57,7 @@ type XdsServiceInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.XdsServiceList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.XdsService, err error)
+	Apply(ctx context.Context, xdsService *semaphorexdsv1alpha1.XdsServiceApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.XdsService, err error)
 	XdsServiceExpansion
 }
 
@@ -179,6 +183,32 @@ func (c *xdsServices) Patch(ctx context.Context, name string, pt types.PatchType
 		Name(name).
 		SubResource(subresources...).
 		VersionedParams(&opts, scheme.ParameterCodec).
+		Body(data).
+		Do(ctx).
+		Into(result)
+	return
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied xdsService.
+func (c *xdsServices) Apply(ctx context.Context, xdsService *semaphorexdsv1alpha1.XdsServiceApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.XdsService, err error) {
+	if xdsService == nil {
+		return nil, fmt.Errorf("xdsService provided to Apply must not be nil")
+	}
+	patchOpts := opts.ToPatchOptions()
+	data, err := json.Marshal(xdsService)
+	if err != nil {
+		return nil, err
+	}
+	name := xdsService.Name
+	if name == nil {
+		return nil, fmt.Errorf("xdsService.Name must be provided to Apply")
+	}
+	result = &v1alpha1.XdsService{}
+	err = c.client.Patch(types.ApplyPatchType).
+		Namespace(c.ns).
+		Resource("xdsservices").
+		Name(*name).
+		VersionedParams(&patchOpts, scheme.ParameterCodec).
 		Body(data).
 		Do(ctx).
 		Into(result)

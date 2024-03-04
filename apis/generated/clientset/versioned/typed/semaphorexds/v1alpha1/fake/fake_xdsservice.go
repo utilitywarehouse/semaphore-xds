@@ -28,11 +28,13 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
+	semaphorexdsv1alpha1 "github.com/utilitywarehouse/semaphore-xds/apis/generated/applyconfiguration/semaphorexds/v1alpha1"
 	v1alpha1 "github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -44,9 +46,9 @@ type FakeXdsServices struct {
 	ns   string
 }
 
-var xdsservicesResource = schema.GroupVersionResource{Group: "semaphorexds", Version: "v1alpha1", Resource: "xdsservices"}
+var xdsservicesResource = v1alpha1.SchemeGroupVersion.WithResource("xdsservices")
 
-var xdsservicesKind = schema.GroupVersionKind{Group: "semaphorexds", Version: "v1alpha1", Kind: "XdsService"}
+var xdsservicesKind = v1alpha1.SchemeGroupVersion.WithKind("XdsService")
 
 // Get takes name of the xdsService, and returns the corresponding xdsService object, and an error if there is any.
 func (c *FakeXdsServices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.XdsService, err error) {
@@ -130,6 +132,28 @@ func (c *FakeXdsServices) DeleteCollection(ctx context.Context, opts v1.DeleteOp
 func (c *FakeXdsServices) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.XdsService, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(xdsservicesResource, c.ns, name, pt, data, subresources...), &v1alpha1.XdsService{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.XdsService), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied xdsService.
+func (c *FakeXdsServices) Apply(ctx context.Context, xdsService *semaphorexdsv1alpha1.XdsServiceApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.XdsService, err error) {
+	if xdsService == nil {
+		return nil, fmt.Errorf("xdsService provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(xdsService)
+	if err != nil {
+		return nil, err
+	}
+	name := xdsService.Name
+	if name == nil {
+		return nil, fmt.Errorf("xdsService.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(xdsservicesResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.XdsService{})
 
 	if obj == nil {
 		return nil, err
