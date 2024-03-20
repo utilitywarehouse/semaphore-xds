@@ -16,8 +16,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	"github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/log"
+	"github.com/utilitywarehouse/semaphore-xds/pkg/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/queue"
 )
 
