@@ -1,4 +1,5 @@
 // Package v1alpha1 contains API Schema definitions for the kube-applier v1alpha1 API group
+// +groupName=semaphore-xds.uw.systems
 package v1alpha1
 
 import (
