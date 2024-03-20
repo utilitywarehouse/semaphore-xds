@@ -39,7 +39,7 @@ type SemaphorexdsV1alpha1Interface interface {
 	XdsServicesGetter
 }
 
-// SemaphorexdsV1alpha1Client is used to interact with features provided by the semaphorexds.uw.systems group.
+// SemaphorexdsV1alpha1Client is used to interact with features provided by the semaphorexds group.
 type SemaphorexdsV1alpha1Client struct {
 	restClient rest.Interface
 }
