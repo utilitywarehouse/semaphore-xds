@@ -27,19 +27,12 @@ codegen-build:
 		-t "${CODEGEN_IMAGE}" \
 		"."
 
-generate-clientset-code: codegen-build
+generate-code: codegen-build
 	docker run --rm \
 		-v "${CURRENT_DIR}:/go/src/${PROJECT_MODULE}" \
 		-w "/go/src/${PROJECT_MODULE}" \
 		"${CODEGEN_IMAGE}" \
-		/go/src/k8s.io/code-generator/kube_codegen.sh client,deepcopy,informer,lister ${PROJECT_MODULE}/apis/generated ${PROJECT_MODULE}/apis semaphorexds:v1alpha1 --go-header-file=/go/src/${PROJECT_MODULE}/boilerplate.go.tmpl
-
-generate-deepcopy-funcs: codegen-build
-	docker run --rm \
-		-v "${CURRENT_DIR}:/go/src/${PROJECT_MODULE}" \
-		-w "/go/src/${PROJECT_MODULE}" \
-		"${CODEGEN_IMAGE}" \
-		controller-gen object:headerFile="/go/src/${PROJECT_MODULE}/boilerplate.go.tmpl" paths="${PROJECT_MODULE}/apis/semaphorexds/..."
+		./hack/update-codegen.sh
 
 generate-manifests: codegen-build
 	docker run --rm \
@@ -52,5 +45,4 @@ generate-manifests: codegen-build
 	kustomize edit add resource semaphore-xds.uw.systems_* ;\
 	}
 
-
-generate: generate-deepcopy-funcs generate-clientset-code generate-manifests
+generate: generate-code generate-manifests

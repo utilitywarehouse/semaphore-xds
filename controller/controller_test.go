@@ -10,9 +10,9 @@ import (
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
+	"github.com/utilitywarehouse/semaphore-xds/pkg/apis/semaphorexds/v1alpha1"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/utilitywarehouse/semaphore-xds/xds"

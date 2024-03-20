@@ -14,10 +14,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 
-	"github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/backoff"
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
+	"github.com/utilitywarehouse/semaphore-xds/pkg/apis/semaphorexds/v1alpha1"
 	"github.com/utilitywarehouse/semaphore-xds/queue"
 	"github.com/utilitywarehouse/semaphore-xds/xds"
 )

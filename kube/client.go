@@ -25,9 +25,9 @@ import (
 	// in case of local kube config
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
-	"github.com/utilitywarehouse/semaphore-xds/apis/generated/clientset/versioned"
-	"github.com/utilitywarehouse/semaphore-xds/apis/generated/informers/externalversions"
-	"github.com/utilitywarehouse/semaphore-xds/apis/semaphorexds/v1alpha1"
+	"github.com/utilitywarehouse/semaphore-xds/pkg/apis/semaphorexds/v1alpha1"
+	"github.com/utilitywarehouse/semaphore-xds/pkg/generated/clientset/versioned"
+	"github.com/utilitywarehouse/semaphore-xds/pkg/generated/informers/externalversions"
 	"github.com/utilitywarehouse/semaphore-xds/queue"
 )
 
