@@ -6,7 +6,7 @@ toolchain go1.22.2
 require (
 	github.com/envoyproxy/go-control-plane v0.12.0
 	github.com/golang/protobuf v1.5.4
-	github.com/hashicorp/go-hclog v1.6.2
+	github.com/hashicorp/go-hclog v1.6.3
 	github.com/mdlayher/promtest v0.0.0-20210824143500-998bde29eaa8
 	github.com/prometheus/client_golang v1.19.0
 	github.com/stretchr/testify v1.9.0
