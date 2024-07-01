@@ -1,7 +1,7 @@
 module github.com/utilitywarehouse/semaphore-xds
 
 go 1.21
-toolchain go1.22.3
+toolchain go1.22.4
 
 require (
 	github.com/envoyproxy/go-control-plane v0.12.0
@@ -14,7 +14,7 @@ require (
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1
 	k8s.io/api v0.30.1
-	k8s.io/apimachinery v0.30.1
+	k8s.io/apimachinery v0.30.2
 	k8s.io/client-go v0.30.1
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
 )
