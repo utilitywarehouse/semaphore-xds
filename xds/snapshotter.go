@@ -138,6 +138,8 @@ func (s *Snapshotter) NodesMap() map[string]string {
 // snapshot
 func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	ctx := context.Background()
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	cls, rds, lsnr, err := servicesToResources(serviceStore)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
@@ -153,8 +155,6 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
-	s.snapNodesMu.Lock()
-	defer s.snapNodesMu.Unlock()
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(Node)
@@ -175,6 +175,8 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 // endoints snapshot
 func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	ctx := context.Background()
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	eds, err := endpointSlicesToClusterLoadAssignments(endpointStore)
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
@@ -188,8 +190,6 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
 	}
-	s.snapNodesMu.Lock()
-	defer s.snapNodesMu.Unlock()
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(Node)
