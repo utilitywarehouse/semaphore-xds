@@ -1,12 +1,16 @@
 package xds
 
 import (
+	"sync"
 	"testing"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/utilitywarehouse/semaphore-xds/log"
+	"golang.org/x/time/rate"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -361,4 +365,87 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
+}
+
+func TestOnStreamRequest(t *testing.T) {
+	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	serviceStore := NewXdsServiceStore()
+	streamID := int64(1)
+	peerAddr := "10.0.0.1"
+	snapshotter.streams.Store(streamID, Stream{
+		peerAddress:      peerAddr,
+		requestRateLimit: rate.NewLimiter(rate.Limit(snapshotter.streamRequestPerSecond), 1),
+	})
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "test",
+					Port: int32(80),
+				}},
+		},
+	}
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
+	snapshotter.SnapServices(serviceStore)
+
+	// Send OnStreamRequests for all resources types, while triggering Snapshots
+	// We should verify this does not end in concurrent map accesses
+	var wg sync.WaitGroup
+	onStreamReqListener := func() {
+		if err := snapshotter.OnStreamRequest(streamID, &discovery.DiscoveryRequest{
+			TypeUrl:       resource.ListenerType,
+			ResourceNames: []string{"foo.bar:80"},
+			Node:          &corev3.Node{Id: "test"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		wg.Done()
+	}
+	onStreamReqCluster := func() {
+		if err := snapshotter.OnStreamRequest(streamID, &discovery.DiscoveryRequest{
+			TypeUrl:       resource.ClusterType,
+			ResourceNames: []string{"foo.bar.80"},
+			Node:          &corev3.Node{Id: "test"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		wg.Done()
+	}
+	onStreamReqRoute := func() {
+		if err := snapshotter.OnStreamRequest(streamID, &discovery.DiscoveryRequest{
+			TypeUrl:       resource.RouteType,
+			ResourceNames: []string{"foo.bar:80"},
+			Node:          &corev3.Node{Id: "test"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		wg.Done()
+	}
+	wg.Add(3)
+	go snapshotter.SnapServices(serviceStore)
+	go onStreamReqListener()
+	go snapshotter.SnapServices(serviceStore)
+	go onStreamReqCluster()
+	go snapshotter.SnapServices(serviceStore)
+	go onStreamReqRoute()
+	go snapshotter.SnapServices(serviceStore)
+	wg.Wait()
+	// Get "test" node snapshot and verify that the Listener resource is included
+	snap, err := snapshotter.servicesCache.GetSnapshot("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Verify that our snapshot will have a single listener, route and
+	// cluster
+	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
 }
