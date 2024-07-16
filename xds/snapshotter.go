@@ -62,8 +62,10 @@ type Snapshotter struct {
 
 // Node keeps the info for a node
 type Node struct {
-	address   string
-	resources *NodeSnapshotResources
+	address     string
+	resources   *NodeSnapshotResources
+	serviceMu   sync.Mutex
+	endpointsMu sync.Mutex
 }
 
 // NodeSnapshot keeps resources and versions to help snapshotting per node
@@ -400,8 +402,10 @@ func (s *Snapshotter) updateNodeServiceSnapshotResources(nodeID, typeURL string,
 	if err != nil {
 		return fmt.Errorf("Cannot get resources from cache: %s", err)
 	}
+	node.serviceMu.Lock()
 	node.resources.services[typeURL] = newSnapResources
 	node.resources.servicesNames[typeURL] = resources
+	node.serviceMu.Unlock()
 	s.nodes.Store(nodeID, node)
 	return nil
 }
@@ -418,8 +422,10 @@ func (s *Snapshotter) updateNodeEndpointsSnapshotResources(nodeID, typeURL strin
 	if err != nil {
 		return fmt.Errorf("Cannot get resources from cache: %s", err)
 	}
+	node.endpointsMu.Lock()
 	node.resources.endpoints[typeURL] = newSnapResources
 	node.resources.endpointsNames[typeURL] = resources
+	node.endpointsMu.Unlock()
 	s.nodes.Store(nodeID, node)
 	return nil
 }
@@ -433,6 +439,10 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 	}
 	node := n.(Node)
 	atomic.AddInt32(&node.resources.serviceSnapVersion, 1)
+	// Node snapshot is going to range over node resources, thus we need to lock in case we are
+	// snapshotting at the same time.
+	node.serviceMu.Lock()
+	defer node.serviceMu.Unlock()
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.resources.serviceSnapVersion), node.resources.services)
 	if err != nil {
 		return err
@@ -449,6 +459,10 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 	}
 	node := n.(Node)
 	atomic.AddInt32(&node.resources.endpointsSnapVersion, 1)
+	// Node snapshot is going to range over node resources, thus we need to lock in case we are
+	// snapshotting at the same time.
+	node.endpointsMu.Lock()
+	defer node.endpointsMu.Unlock()
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.resources.endpointsSnapVersion), node.resources.endpoints)
 	if err != nil {
 		return err
