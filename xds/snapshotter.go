@@ -76,6 +76,31 @@ type NodeSnapshotResources struct {
 	endpointsSnapVersion int32
 }
 
+// Deep copy function for NodeSnapshotResources
+func deepCopyNodeSnapshotResources(src *NodeSnapshotResources) *NodeSnapshotResources {
+	dst := &NodeSnapshotResources{
+		services:             make(map[string][]types.Resource),
+		servicesNames:        make(map[string][]string),
+		serviceSnapVersion:   src.serviceSnapVersion,
+		endpoints:            make(map[string][]types.Resource),
+		endpointsNames:       make(map[string][]string),
+		endpointsSnapVersion: src.endpointsSnapVersion,
+	}
+	for k, v := range src.services {
+		dst.services[k] = append(dst.services[k], v...)
+	}
+	for k, v := range src.servicesNames {
+		dst.servicesNames[k] = append(dst.servicesNames[k], v...)
+	}
+	for k, v := range src.endpoints {
+		dst.endpoints[k] = append(dst.endpoints[k], v...)
+	}
+	for k, v := range src.endpointsNames {
+		dst.endpointsNames[k] = append(dst.endpointsNames[k], v...)
+	}
+	return dst
+}
+
 // Maps type urls to services and endpoints for muxCache
 func mapTypeURL(typeURL string) string {
 	switch typeURL {
@@ -127,7 +152,7 @@ func (s *Snapshotter) NodesMap() map[string]string {
 	r := make(map[string]string)
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
-		node := n.(Node)
+		node := n.(*Node)
 		r[nodeID] = node.address
 		return true
 	})
@@ -157,7 +182,7 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	}
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
-		node := n.(Node)
+		node := n.(*Node)
 		for typeURL, resources := range node.resources.servicesNames {
 			if err := s.updateNodeServiceSnapshotResources(nodeID, typeURL, resources); err != nil {
 				log.Logger.Error("Failed to update service resources before snapping", "type", typeURL, "node", nodeID, "resources", resources, "error", err)
@@ -192,7 +217,7 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	}
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
-		node := n.(Node)
+		node := n.(*Node)
 		for typeURL, resources := range node.resources.endpointsNames {
 			if err := s.updateNodeEndpointsSnapshotResources(nodeID, typeURL, resources); err != nil {
 				log.Logger.Error("Failed to update endpoints resources before snapping", "type", typeURL, "node", nodeID, "resources", resources, "error", err)
@@ -212,7 +237,7 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 		peerAddr = peerInfo.Addr.String()
 	}
 	log.Logger.Info("OnStreamOpen", "peer address", peerAddr, "id", id, "type", typ)
-	s.streams.Store(id, Stream{
+	s.streams.Store(id, &Stream{
 		peerAddress:      peerAddr,
 		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
 	})
@@ -223,7 +248,7 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
 	st, _ := s.streams.Load(id)
-	stream := st.(Stream)
+	stream := st.(*Stream)
 	s.streams.Delete(id)
 	go s.deleteNode(node.GetId())
 	metricOnStreamClosedInc(stream.peerAddress)
@@ -232,7 +257,7 @@ func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
 	ctx := context.Background()
 	st, _ := s.streams.Load(id)
-	stream := st.(Stream)
+	stream := st.(*Stream)
 	log.Logger.Info("OnStreamRequest",
 		"id", id,
 		"peer", stream.peerAddress,
@@ -270,7 +295,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 
 func (s *Snapshotter) OnStreamResponse(ctx context.Context, id int64, req *discovery.DiscoveryRequest, resp *discovery.DiscoveryResponse) {
 	st, _ := s.streams.Load(id)
-	stream := st.(Stream)
+	stream := st.(*Stream)
 	log.Logger.Info("OnStreamResponse",
 		"id", id,
 		"type", resp.GetTypeUrl(),
@@ -329,7 +354,7 @@ func (s *Snapshotter) addNewNode(nodeID, address string) {
 		endpointsNames := map[string][]string{
 			resource.EndpointType: []string{},
 		}
-		s.nodes.Store(nodeID, Node{
+		s.nodes.Store(nodeID, &Node{
 			address: address,
 			resources: &NodeSnapshotResources{
 				services:       services,
@@ -395,14 +420,21 @@ func (s *Snapshotter) updateNodeServiceSnapshotResources(nodeID, typeURL string,
 	if !ok {
 		return fmt.Errorf("Cannot update service snapshot resources, node: %s not found", nodeID)
 	}
-	node := n.(Node)
+	node := n.(*Node)
+	nodeResources := deepCopyNodeSnapshotResources(node.resources)
+
 	newSnapResources, err := s.getResourcesFromCache(typeURL, resources)
 	if err != nil {
 		return fmt.Errorf("Cannot get resources from cache: %s", err)
 	}
-	node.resources.services[typeURL] = newSnapResources
-	node.resources.servicesNames[typeURL] = resources
-	s.nodes.Store(nodeID, node)
+
+	nodeResources.services[typeURL] = newSnapResources
+	nodeResources.servicesNames[typeURL] = resources
+	updatedNode := &Node{
+		address:   node.address,
+		resources: nodeResources,
+	}
+	s.nodes.Store(nodeID, updatedNode)
 	return nil
 }
 
@@ -413,14 +445,21 @@ func (s *Snapshotter) updateNodeEndpointsSnapshotResources(nodeID, typeURL strin
 	if !ok {
 		return fmt.Errorf("Cannot update service snapshot resources, node: %s not found", nodeID)
 	}
-	node := n.(Node)
+	node := n.(*Node)
+	nodeResources := deepCopyNodeSnapshotResources(node.resources)
+
 	newSnapResources, err := s.getResourcesFromCache(typeURL, resources)
 	if err != nil {
 		return fmt.Errorf("Cannot get resources from cache: %s", err)
 	}
-	node.resources.endpoints[typeURL] = newSnapResources
-	node.resources.endpointsNames[typeURL] = resources
-	s.nodes.Store(nodeID, node)
+
+	nodeResources.endpoints[typeURL] = newSnapResources
+	nodeResources.endpointsNames[typeURL] = resources
+	updatedNode := &Node{
+		address:   node.address,
+		resources: nodeResources,
+	}
+	s.nodes.Store(nodeID, updatedNode)
 	return nil
 }
 
@@ -431,7 +470,7 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 	if !ok {
 		return fmt.Errorf("Cannot create a new snapshot, node: %s not found", nodeID)
 	}
-	node := n.(Node)
+	node := n.(*Node)
 	atomic.AddInt32(&node.resources.serviceSnapVersion, 1)
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.resources.serviceSnapVersion), node.resources.services)
 	if err != nil {
@@ -447,7 +486,7 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 	if !ok {
 		return fmt.Errorf("Cannot create a new snapshot, node: %s not found", nodeID)
 	}
-	node := n.(Node)
+	node := n.(*Node)
 	atomic.AddInt32(&node.resources.endpointsSnapVersion, 1)
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.resources.endpointsSnapVersion), node.resources.endpoints)
 	if err != nil {
@@ -481,7 +520,7 @@ func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, resources []s
 	if !ok {
 		return false
 	}
-	node := n.(Node)
+	node := n.(*Node)
 	if mapTypeURL(typeURL) == "services" {
 		return !resourcesMatch(node.resources.servicesNames[typeURL], resources)
 	}
