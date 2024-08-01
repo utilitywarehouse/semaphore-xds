@@ -19,7 +19,7 @@ func init() {
 }
 
 func TestSnapServices_EmptyServiceList(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
@@ -33,7 +33,7 @@ func TestSnapServices_EmptyServiceList(t *testing.T) {
 }
 
 func TestSnapServices_SingleService(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,7 +66,7 @@ func TestSnapServices_SingleService(t *testing.T) {
 }
 
 func TestSnapServices_NoServicePorts(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,7 +90,7 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 }
 
 func TestSnapServices_MultipleServicePorts(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -127,7 +127,7 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 }
 
 func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	endpointStore := NewXdsEnpointStore()
 	snapshotter.SnapEndpoints(endpointStore)
 	snap, err := snapshotter.endpointsCache.GetSnapshot(testNodeID)
@@ -139,7 +139,7 @@ func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
 }
 
 func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	log.InitLogger("test-semaphore-xds", "debug")
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -158,7 +158,7 @@ func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
 }
 
 func TestSnapEndpoints_UpdateAddress(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	// Create test EndpointSlice
 	httpPortName := "http"
 	httpPortValue := int32(80)
@@ -241,7 +241,7 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 }
 
 func TestSnapServices_NodeSnapshotResources(t *testing.T) {
-	snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 	serviceStore := NewXdsServiceStore()
 	// fooA.bar:80
 	svcA := &v1.Service{
@@ -361,4 +361,62 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
+}
+
+func TestSnapServices_SingleServiceWithAuthoritySet(t *testing.T) {
+	snapshotter := NewSnapshotter("test-authority", uint(0), float64(0), float64(0))
+	serviceStore := NewXdsServiceStore()
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "test",
+					Port: int32(80),
+				}},
+		},
+	}
+	serviceStore.AddOrUpdate(svc, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
+	snapshotter.SnapServices(serviceStore)
+	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Verify that our snapshot will have a 2 listeners, 2 routes and
+	// 2 clusters
+	expectedListeners := []string{makeListenerName("foo", "bar", int32(80)), makeXdstpListenerName("foo", "bar", "test-authority", int32(80))}
+	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
+	for _, res := range snap.GetResources(resource.ListenerType) {
+		listener, err := UnmarshalResourceToListener(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Contains(t, expectedListeners, listener.Name)
+	}
+	expectedClusters := []string{makeClusterName("foo", "bar", int32(80)), makeXdstpClusterName("foo", "bar", "test-authority", int32(80))}
+	assert.Equal(t, 2, len(snap.GetResources(resource.ClusterType)))
+	for _, res := range snap.GetResources(resource.ClusterType) {
+		cluster, err := UnmarshalResourceToCluster(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Contains(t, expectedClusters, cluster.Name)
+	}
+	expectedRoutes := []string{makeRouteConfigName("foo", "bar", int32(80)), makeXdstpRouteConfigName("foo", "bar", "test-authority", int32(80))}
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType)))
+	for _, res := range snap.GetResources(resource.RouteType) {
+		route, err := UnmarshalResourceToRouteConfiguration(res)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Contains(t, expectedRoutes, route.Name)
+	}
+
 }

@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	flagAuthorityName            = flag.String("authority-name", getEnv("SXDS_AUTHORITY_NAME", ""), "Authority name of the server used in federation setups. If set the server will duplicate all resources in the snapshot using the naming pattern: `xdstp://<authority_name>/envoy.config.*.v3.*/%s`")
 	flagClustersConfigPath       = flag.String("clusters-config", getEnv("SXDS_CLUSTERS_CONFIG", ""), "Path to a clusters config json file, if not provided the app will try to use a single in cluster client")
 	flagLogLevel                 = flag.String("log-level", getEnv("SXDS_LOG_LEVEL", "info"), "Log level")
 	flagNamespace                = flag.String("namespace", getEnv("SXDS_NAMESPACE", ""), "The namespace in which to watch for kubernetes resources")
@@ -50,7 +51,7 @@ func main() {
 	controller.LbPolicyLabel = *flagLbPolicyLabel
 
 	localClient, remoteClients := createClientsFromConfig(*flagClustersConfigPath)
-	snapshotter := xds.NewSnapshotter(*flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond)
+	snapshotter := xds.NewSnapshotter(*flagAuthorityName, *flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond)
 	xds.InitSnapMetricsCollector(snapshotter)
 	go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
 

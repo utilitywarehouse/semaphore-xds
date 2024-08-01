@@ -129,7 +129,7 @@ func TestSnapMetricsCollector(t *testing.T) {
 	log.InitLogger("test-semaphore-xds-metrics", "debug")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			snapshotter := NewSnapshotter(uint(0), float64(0), float64(0))
+			snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 			snapshotter.SnapServices(tt.serviceStore)
 			snapshotter.SnapEndpoints(tt.endpointStore)
 			snapshotter.addNewNode(tt.nodeID, tt.nodeAddress)

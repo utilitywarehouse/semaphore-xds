@@ -47,6 +47,7 @@ type Stream struct {
 }
 
 type Snapshotter struct {
+	authority              string // Authority name of the server for federated requests
 	servePort              uint
 	servicesCache          cache.SnapshotCache
 	serviceSnapVersion     int32
@@ -114,7 +115,7 @@ func mapTypeURL(typeURL string) string {
 }
 
 // NewSnapshotter needs a grpc server port and the allowed requests limits per server and stream per second
-func NewSnapshotter(port uint, requestLimit, streamRequestLimit float64) *Snapshotter {
+func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimit float64) *Snapshotter {
 	servicesCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger)
 	endpointsCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger) // This could be a linear cache? https://pkg.go.dev/github.com/envoyproxy/go-control-plane/pkg/cache/v3#LinearCache
 	muxCache := cache.MuxCache{
@@ -130,6 +131,7 @@ func NewSnapshotter(port uint, requestLimit, streamRequestLimit float64) *Snapsh
 		},
 	}
 	return &Snapshotter{
+		authority:              authority,
 		servePort:              port,
 		servicesCache:          servicesCache,
 		endpointsCache:         endpointsCache,
@@ -165,10 +167,27 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	ctx := context.Background()
 	s.snapNodesMu.Lock()
 	defer s.snapNodesMu.Unlock()
-	cls, rds, lsnr, err := servicesToResources(serviceStore)
+	cls, rds, lsnr, err := servicesToResources(serviceStore, "")
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
 	}
+	// if authority is set, also snapshot based on xdstp names
+	if s.authority != "" {
+		xdstpCLS, xdstpRDS, xdstpLSNR, err := servicesToResources(serviceStore, s.authority)
+		if err != nil {
+			return fmt.Errorf("Failed to snapshot Services: %v", err)
+		}
+		for _, c := range xdstpCLS {
+			cls = append(cls, c)
+		}
+		for _, r := range xdstpRDS {
+			rds = append(rds, r)
+		}
+		for _, l := range xdstpLSNR {
+			lsnr = append(lsnr, l)
+		}
+	}
+
 	atomic.AddInt32(&s.serviceSnapVersion, 1)
 	resources := map[string][]types.Resource{
 		resource.ClusterType:  cls,
@@ -202,9 +221,19 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	ctx := context.Background()
 	s.snapNodesMu.Lock()
 	defer s.snapNodesMu.Unlock()
-	eds, err := endpointSlicesToClusterLoadAssignments(endpointStore)
+	eds, err := endpointSlicesToClusterLoadAssignments(endpointStore, "")
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
+	}
+	// if authority is set, also snapshot based on xdstp names
+	if s.authority != "" {
+		xdstpEDS, err := endpointSlicesToClusterLoadAssignments(endpointStore, s.authority)
+		if err != nil {
+			return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
+		}
+		for _, e := range xdstpEDS {
+			eds = append(eds, e)
+		}
 	}
 	atomic.AddInt32(&s.endpointsSnapVersion, 1)
 	resources := map[string][]types.Resource{
@@ -283,6 +312,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 		log.Logger.Info("Client using empty string as node id", "client", stream.peerAddress)
 		return nil
 	}
+	// Trim federation prefix for Listener requests
 
 	s.addNewNode(r.GetNode().GetId(), stream.peerAddress)
 	if s.needToUpdateSnapshot(r.GetNode().GetId(), r.GetTypeUrl(), r.GetResourceNames()) {

@@ -29,8 +29,7 @@ func makeClusterName(name, namespace string, port int32) string {
 }
 
 // This is a bit confusing but it seems simpler to name the listener, route and
-//
-//	virtual host as the service domain we expect to hit from the client.
+// virtual host as the service domain we expect to hit from the client.
 func makeListenerName(name, namespace string, port int32) string {
 	return makeGlobalServiceDomain(name, namespace, port)
 }
@@ -45,6 +44,28 @@ func makeVirtualHostName(name, namespace string, port int32) string {
 
 func makeGlobalServiceDomain(name, namespace string, port int32) string {
 	return net.JoinHostPort(fmt.Sprintf("%s.%s", name, namespace), strconv.Itoa(int(port)))
+}
+
+// xdstp cluster name based on:
+// https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
+func makeXdstpClusterName(name, namespace, authority string, port int32) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/%s", authority, makeClusterName(name, namespace, port))
+}
+
+// xdstp listener name based on:
+// https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/listener/v3/listener.proto#config-listener-v3-listener
+func makeXdstpListenerName(name, namespace, authority string, port int32) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, makeListenerName(name, namespace, port))
+}
+
+// xdstp route configuration name based on:
+// https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route.proto
+func makeXdstpRouteConfigName(name, namespace, authority string, port int32) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/%s", authority, makeClusterName(name, namespace, port))
+}
+
+func makeXdstpVirtualHostName(name, namespace, authority string, port int32) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, makeVirtualHostName(name, namespace, port))
 }
 
 // UnmarshalResourceToListener parses a resource into a Listener

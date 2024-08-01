@@ -39,7 +39,7 @@ func TestReconcileServices_LabelledService(t *testing.T) {
 		"./test-resources/labelled_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -82,7 +82,7 @@ func TestReconcileServices_LabelledServiceLbPolicy(t *testing.T) {
 		"./test-resources/labelled_service_ring_hash_balancer.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -119,7 +119,7 @@ func TestReconcileServices_LabelledServiceInvalidLbPolicy(t *testing.T) {
 		"./test-resources/labelled_service_invalid_balancer.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -156,7 +156,7 @@ func TestReconcileServices_XdsService(t *testing.T) {
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -199,7 +199,7 @@ func TestReconcileServices_XdsServiceNotExistent(t *testing.T) {
 		"./test-resources/xds_service_not_existent.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -233,7 +233,7 @@ func TestReconcileServices_XdsServiceDelete(t *testing.T) {
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -284,7 +284,7 @@ func TestReconcileLocalEndpointSlice_SnapOnUpdate(t *testing.T) {
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -318,7 +318,7 @@ func TestReconcileLocalEndpointSlice_NotFound(t *testing.T) {
 		"./test-resources/endpointslice.yaml",
 	)
 	client.EndpointSliceApiError(kubeerror.NewNotFound(schema.GroupResource{Resource: "endpointslice"}, "foo"))
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -345,7 +345,7 @@ func TestReconcileLocalEndpointSlice_NonXdsService(t *testing.T) {
 	client := kube.NewClientMock(
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -373,7 +373,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -436,7 +436,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpoints(t *te
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -487,7 +487,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -539,7 +539,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *test
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -601,7 +601,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -656,7 +656,7 @@ func TestReconcileLocalEndpointSlices_XdsServiceWithEmptyLocalEndpoints(t *testi
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -700,7 +700,7 @@ func TestReconcileServices_XdsServiceWithRingHash(t *testing.T) {
 		"./test-resources/xds_service_ring_hash_balancing.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter(testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
 	controller := NewController(
 		client,
 		[]kube.Client{},
