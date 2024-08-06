@@ -189,12 +189,15 @@ func endpointSliceToClusterEndpoints(e *discoveryv1.EndpointSlice, priority uint
 
 // createClustersForServiceEndpoints translates service endpoints into a list
 // of EDSCluster objects
-func createClustersFromEndpointStore(store XdsEndpointStore) EdsClusters {
+func createClustersFromEndpointStore(store XdsEndpointStore, authority string) EdsClusters {
 	clusters := make(EdsClusters)
 	for _, serviceEndpoint := range store.All() {
 		for _, e := range serviceEndpoint.endpointSlices {
 			for _, ce := range endpointSliceToClusterEndpoints(e.endpointSlice, e.priority) {
 				clusterName := makeClusterName(serviceEndpoint.service, serviceEndpoint.namespace, ce.port)
+				if authority != "" {
+					clusterName = makeXdstpClusterName(serviceEndpoint.service, serviceEndpoint.namespace, authority, ce.port)
+				}
 				if c, ok := clusters[clusterName]; !ok {
 					clusters[clusterName] = EdsCluster{
 						endpoints: []EdsClusterEndpoints{ce},
@@ -211,9 +214,9 @@ func createClustersFromEndpointStore(store XdsEndpointStore) EdsClusters {
 
 // endpointSlicesToClusterLoadAssignments expects an EndpointSlice watcher and
 // will list watched resources as a clusterLoadAssignment
-func endpointSlicesToClusterLoadAssignments(endpointStore XdsEndpointStore) ([]types.Resource, error) {
+func endpointSlicesToClusterLoadAssignments(endpointStore XdsEndpointStore, authority string) ([]types.Resource, error) {
 	eds := []types.Resource{}
-	clusters := createClustersFromEndpointStore(endpointStore)
+	clusters := createClustersFromEndpointStore(endpointStore, authority)
 	for name, cluster := range clusters {
 		var localityEps []*endpointv3.LocalityLbEndpoints
 		for _, endpoint := range cluster.endpoints {

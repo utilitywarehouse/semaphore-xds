@@ -82,17 +82,23 @@ func (s *xdsServiceStoreWrapper) key(service, namespace string) string {
 	return fmt.Sprintf("%s.%s", service, namespace)
 }
 
-func makeRouteConfig(name, namespace string, port int32, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
+func makeRouteConfig(name, namespace, authority string, port int32, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
 	routeName := makeRouteConfigName(name, namespace, port)
 	clusterName := makeClusterName(name, namespace, port)
 	virtualHostName := makeVirtualHostName(name, namespace, port)
-
+	domains := []string{makeGlobalServiceDomain(name, namespace, port)}
+	if authority != "" {
+		routeName = makeXdstpRouteConfigName(name, namespace, authority, port)
+		clusterName = makeXdstpClusterName(name, namespace, authority, port)
+		virtualHostName = makeXdstpVirtualHostName(name, namespace, authority, port)
+		domains = append(domains, virtualHostName)
+	}
 	return &routev3.RouteConfiguration{
 		Name: routeName,
 		VirtualHosts: []*routev3.VirtualHost{
 			{
 				Name:    virtualHostName,
-				Domains: []string{makeGlobalServiceDomain(name, namespace, port)},
+				Domains: domains,
 				Routes: []*routev3.Route{{
 					Match: &routev3.RouteMatch{
 						PathSpecifier: &routev3.RouteMatch_Prefix{
@@ -131,17 +137,24 @@ func makeManager(routeConfig *routev3.RouteConfiguration) (*anypb.Any, error) {
 	})
 }
 
-func makeListener(name, namespace string, port int32, manager *anypb.Any) *listenerv3.Listener {
+func makeListener(name, namespace, authority string, port int32, manager *anypb.Any) *listenerv3.Listener {
+	listenerName := makeListenerName(name, namespace, port)
+	if authority != "" {
+		listenerName = makeXdstpListenerName(name, namespace, authority, port)
+	}
 	return &listenerv3.Listener{
-		Name: makeListenerName(name, namespace, port),
+		Name: listenerName,
 		ApiListener: &listenerv3.ApiListener{
 			ApiListener: manager,
 		},
 	}
 }
 
-func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_LbPolicy, ringHash *clusterv3.Cluster_RingHashLbConfig) *clusterv3.Cluster {
+func makeCluster(name, namespace, authority string, port int32, policy clusterv3.Cluster_LbPolicy, ringHash *clusterv3.Cluster_RingHashLbConfig) *clusterv3.Cluster {
 	clusterName := makeClusterName(name, namespace, port)
+	if authority != "" {
+		clusterName = makeXdstpClusterName(name, namespace, authority, port)
+	}
 	cluster := &clusterv3.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
@@ -153,6 +166,12 @@ func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_Lb
 				},
 			},
 		},
+	}
+
+	if authority != "" {
+		// This will be the name of the subsequently requested ClusterLoadAssignment. We need to set this
+		// to the cluster name to hit resources in the cache and reply to EDS requests
+		cluster.EdsClusterConfig.ServiceName = clusterName
 	}
 
 	switch policy {
@@ -167,22 +186,22 @@ func makeCluster(name, namespace string, port int32, policy clusterv3.Cluster_Lb
 
 // servicesToResources will return a set of listener, routeConfiguration and
 // cluster for each service port
-func servicesToResources(serviceStore XdsServiceStore) ([]types.Resource, []types.Resource, []types.Resource, error) {
+func servicesToResources(serviceStore XdsServiceStore, authority string) ([]types.Resource, []types.Resource, []types.Resource, error) {
 	var cls []types.Resource
 	var rds []types.Resource
 	var lsnr []types.Resource
 	for _, s := range serviceStore.All() {
 		for _, port := range s.Service.Spec.Ports {
-			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, port.Port, s.Retry, s.RingHashPolicies)
+			routeConfig := makeRouteConfig(s.Service.Name, s.Service.Namespace, authority, port.Port, s.Retry, s.RingHashPolicies)
 			rds = append(rds, routeConfig)
 			manager, err := makeManager(routeConfig)
 			if err != nil {
 				log.Logger.Error("Cannot create listener manager", "error", err)
 				continue
 			}
-			listener := makeListener(s.Service.Name, s.Service.Namespace, port.Port, manager)
+			listener := makeListener(s.Service.Name, s.Service.Namespace, authority, port.Port, manager)
 			lsnr = append(lsnr, listener)
-			cluster := makeCluster(s.Service.Name, s.Service.Namespace, port.Port, s.Policy, s.RingHash)
+			cluster := makeCluster(s.Service.Name, s.Service.Namespace, authority, port.Port, s.Policy, s.RingHash)
 			cls = append(cls, cluster)
 		}
 	}
