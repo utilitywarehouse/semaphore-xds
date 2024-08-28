@@ -9,4 +9,7 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - {}
+    - ports:
+        - port: 18000
+      from:
+        - podSelector: {}
