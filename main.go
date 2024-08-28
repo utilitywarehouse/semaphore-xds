@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"regexp"
 	"strings"
@@ -53,7 +54,7 @@ func main() {
 	localClient, remoteClients := createClientsFromConfig(*flagClustersConfigPath)
 	snapshotter := xds.NewSnapshotter(*flagAuthorityName, *flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond)
 	xds.InitSnapMetricsCollector(snapshotter)
-	go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
+	go serveMetricsAndPprof(fmt.Sprintf(":%s", *flagMetricsListenPort))
 
 	controller := controller.NewController(
 		localClient,
@@ -70,13 +71,16 @@ func main() {
 	controller.Stop()
 }
 
-func serveMetrics(address string) {
+func serveMetricsAndPprof(address string) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	server := http.Server{
 		Addr:    address,
 		Handler: mux,
 	}
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/{action}", pprof.Index)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	log.Logger.Error(
 		"Listen and Serve",
 		"err", server.ListenAndServe(),
