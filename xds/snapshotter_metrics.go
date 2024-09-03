@@ -12,56 +12,44 @@ import (
 )
 
 var (
-	xdsClientOnStreamOpen = prometheus.NewCounterVec(prometheus.CounterOpts{
+	xdsClientOnStreamOpen = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "semaphore_xds_on_stream_open",
 		Help: "Total number of client open stream requests to the xds server",
-	},
-		[]string{"address"},
-	)
-	xdsClientOnStreamClosed = prometheus.NewCounterVec(prometheus.CounterOpts{
+	})
+	xdsClientOnStreamClosed = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "semaphore_xds_on_stream_close",
 		Help: "Total number of close stream notifications from the xds server",
-	},
-		[]string{"address"},
-	)
+	})
 	xdsClientOnStreamRequest = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "semaphore_xds_on_stream_request",
 		Help: "Total number of client requests for resources discovery to the xds server",
 	},
-		[]string{"node_id", "address", "typeURL"},
+		[]string{"typeURL"},
 	)
 	xdsClientOnStreamResponse = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "semaphore_xds_on_stream_response",
 		Help: "Total number of server responses for resources discovery to the xds server",
 	},
-		[]string{"node_id", "address", "typeURL"},
+		[]string{"typeURL"},
 	)
 )
 
-func metricOnStreamOpenInc(address string) {
-	xdsClientOnStreamOpen.With(prometheus.Labels{
-		"address": address,
-	}).Inc()
+func metricOnStreamOpenInc() {
+	xdsClientOnStreamOpen.Inc()
 }
 
-func metricOnStreamClosedInc(address string) {
-	xdsClientOnStreamClosed.With(prometheus.Labels{
-		"address": address,
-	}).Inc()
+func metricOnStreamClosedInc() {
+	xdsClientOnStreamClosed.Inc()
 }
 
-func metricOnStreamRequestInc(nodeID, address, typeURL string) {
+func metricOnStreamRequestInc(typeURL string) {
 	xdsClientOnStreamRequest.With(prometheus.Labels{
-		"node_id": nodeID,
-		"address": address,
 		"typeURL": typeURL,
 	}).Inc()
 }
 
-func metricOnStreamResponseInc(nodeID, address, typeURL string) {
+func metricOnStreamResponseInc(typeURL string) {
 	xdsClientOnStreamResponse.With(prometheus.Labels{
-		"node_id": nodeID,
-		"address": address,
 		"typeURL": typeURL,
 	}).Inc()
 }
