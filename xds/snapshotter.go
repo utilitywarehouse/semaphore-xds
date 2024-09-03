@@ -270,17 +270,15 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 		peerAddress:      peerAddr,
 		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
 	})
-	metricOnStreamOpenInc(peerAddr)
+	metricOnStreamOpenInc()
 	return nil
 }
 
 func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
-	st, _ := s.streams.Load(id)
-	stream := st.(*Stream)
 	s.streams.Delete(id)
 	go s.deleteNode(node.GetId())
-	metricOnStreamClosedInc(stream.peerAddress)
+	metricOnStreamClosedInc()
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
@@ -296,7 +294,7 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 		"names", strings.Join(r.GetResourceNames(), ", "),
 		"version", r.GetVersionInfo(),
 	)
-	metricOnStreamRequestInc(r.GetNode().GetId(), stream.peerAddress, r.GetTypeUrl())
+	metricOnStreamRequestInc(r.GetTypeUrl())
 	// Verify peer is not exceeding requests rate limit
 	if err := waitForRequestLimit(ctx, stream.requestRateLimit); err != nil {
 		log.Logger.Warn("Peer exceeded rate limit", "error", err, "peer", stream.peerAddress)
@@ -324,15 +322,13 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 }
 
 func (s *Snapshotter) OnStreamResponse(ctx context.Context, id int64, req *discovery.DiscoveryRequest, resp *discovery.DiscoveryResponse) {
-	st, _ := s.streams.Load(id)
-	stream := st.(*Stream)
 	log.Logger.Info("OnStreamResponse",
 		"id", id,
 		"type", resp.GetTypeUrl(),
 		"version", resp.GetVersionInfo(),
 		"resources", len(resp.GetResources()),
 	)
-	metricOnStreamResponseInc(req.GetNode().GetId(), stream.peerAddress, resp.GetTypeUrl())
+	metricOnStreamResponseInc(resp.GetTypeUrl())
 }
 
 func (s *Snapshotter) OnFetchRequest(ctx context.Context, req *discovery.DiscoveryRequest) error {
