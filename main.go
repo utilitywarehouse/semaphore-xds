@@ -28,7 +28,7 @@ var (
 	flagMaxRequestsPerSecond     = flag.Float64("max-requests-per-second", 500.0, "maximum allowed requests to the server per second")
 	flagMaxPeerRequestsPerSecond = flag.Float64("max-peer-requests-per-second", 50.0, "maximum allowed requests from a peer per second")
 	flagMetricsListenPort        = flag.String("metrics-listen-port", "8080", "Listen port to serve prometheus metrics")
-	flagPprofListenAddress       = flag.String("pprof-listen-address", "127.0.0.1:8081", "Listen address to expose pprof endpoints")
+	flagPprofListenAddress       = flag.String("pprof-listen-address", "127.0.0.1:6060", "Listen address to expose pprof endpoints")
 
 	bearerRe = regexp.MustCompile(`[A-Z|a-z0-9\-\._~\+\/]+=*`)
 )
