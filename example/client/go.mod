@@ -2,11 +2,9 @@ module github.com/utilitywarehouse/semaphore-xds/example/client
 
 go 1.21
 
-replace google.golang.org/grpc => google.golang.org/grpc v1.65.0
-
 require (
 	github.com/golang/protobuf v1.5.4
-	google.golang.org/grpc v1.66.0
+	google.golang.org/grpc v1.66.2
 )
 
 require (
