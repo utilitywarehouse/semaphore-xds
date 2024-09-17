@@ -444,6 +444,12 @@ func (s *Snapshotter) deleteNodeStream(nodeID string, streamID int64) {
 		resources: nodeResources,
 	}
 	s.nodes.Store(nodeID, updatedNode)
+	if err := s.nodeServiceSnapshot(nodeID); err != nil {
+		log.Logger.Warn("Failed to update service snapshot on stream closure", "node", nodeID, "error", err)
+	}
+	if err := s.nodeEndpointsSnapshot(nodeID); err != nil {
+		log.Logger.Warn("Failed to update endpoints snapshot on stream closure", "node", nodeID, "error", err)
+	}
 }
 
 // deleteNode removes a node from nodes map and clears existing snaphots for the node

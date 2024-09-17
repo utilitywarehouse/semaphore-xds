@@ -1,6 +1,7 @@
 package xds
 
 import (
+	"fmt"
 	"testing"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -362,6 +363,99 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
+}
+
+func TestSnapServices_MultipleStreams(t *testing.T) {
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	serviceStore := NewXdsServiceStore()
+	// fooA.bar:80
+	svcA := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fooA",
+			Namespace: "bar",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "test",
+					Port: int32(80),
+				}},
+		},
+	}
+	serviceStore.AddOrUpdate(svcA, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
+	// fooB.bar:80
+	svcB := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fooB",
+			Namespace: "bar",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				v1.ServicePort{
+					Name: "test",
+					Port: int32(80),
+				}},
+		},
+	}
+	serviceStore.AddOrUpdate(svcB, Service{
+		Policy:                   clusterv3.Cluster_ROUND_ROBIN,
+		EnableRemoteEndpoints:    false,
+		PrioritizeLocalEndpoints: false,
+	})
+	// Snap to add services to the default snapshot
+	snapshotter.SnapServices(serviceStore)
+	// Open a new stream (id:1) for test-node and request 1 of the above services
+	nodeID := "test-node"
+	streamID := int64(1)
+	nodeAddress := "10.0.0.1"
+	snapshotter.addOrUpdateNode(nodeID, nodeAddress, streamID)
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80"}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80"}); err != nil {
+		t.Fatal(err)
+	}
+	// Verify the requested listener resources are now in a snaphot for the node id
+	snap, err := snapshotter.servicesCache.GetSnapshot(nodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	// Open a new stream (id:2) for test-node and request the other resource in the store
+	streamID = 2
+	snapshotter.addOrUpdateNode(nodeID, nodeAddress, streamID)
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooB.bar:80"}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooB.bar:80"}); err != nil {
+		t.Fatal(err)
+	}
+	// Verify the requested listener resources are added to the node snapshot
+	snap, err = snapshotter.servicesCache.GetSnapshot(nodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	// Close one of the streams (id:1)
+	streamID = int64(1)
+	snapshotter.deleteNodeStream(nodeID, streamID)
+	// Verify that we still have a snapshot in cache but with less resources
+	snap, err = snapshotter.servicesCache.GetSnapshot(nodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
+	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
+	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	// Close the 2nd stream (id:2) and verify we do not keep a snap for the node
+	streamID = int64(2)
+	snapshotter.deleteNodeStream(nodeID, streamID)
+	_, err = snapshotter.servicesCache.GetSnapshot(nodeID)
+	assert.Equal(t, fmt.Errorf("no snapshot found for node %s", nodeID), err)
 }
 
 func TestSnapServices_SingleServiceWithAuthoritySet(t *testing.T) {
