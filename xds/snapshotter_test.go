@@ -286,11 +286,12 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 
 	// Add a new test node
 	nodeID := "test-node"
+	streamID := int64(1)
 	nodeAddress := "10.0.0.1"
-	snapshotter.addNewNode(nodeID, nodeAddress)
+	snapshotter.addOrUpdateNode(nodeID, nodeAddress, streamID)
 	// Request all listener resources for the node - Update the node snapshot
-	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80"}))
-	if err := snapshotter.updateNodeSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80"}); err != nil {
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80"}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80"}); err != nil {
 		t.Fatal(err)
 	}
 	// Verify Listener resources are now in a snaphot for the node id
@@ -302,8 +303,8 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
 	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
 	// A new ADS request with fewer resources should remove from snapshot
-	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80"}))
-	if err := snapshotter.updateNodeSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80"}); err != nil {
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80"}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80"}); err != nil {
 		t.Fatal(err)
 	}
 	// Verify Listener resources are now in a snaphot for the node id
@@ -332,8 +333,8 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 	assert.Equal(t, 2, len(snap.GetResources(resource.ClusterType)))
 	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType)))
 	// Client requesting more resources again should bring them back into the node snapshot
-	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80"}))
-	if err := snapshotter.updateNodeSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80"}); err != nil {
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80"}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80"}); err != nil {
 		t.Fatal(err)
 	}
 	snap, err = snapshotter.servicesCache.GetSnapshot(nodeID)
@@ -342,8 +343,8 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 	}
 	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
 	// Requesting non existing resources should leave the list unaffected
-	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80", "fooC.bar:80"}))
-	if err := snapshotter.updateNodeSnapshot(nodeID, resource.ListenerType, []string{"fooA.bar:80", "fooB.bar:80", "fooC.bar:80"}); err != nil {
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80", "fooC.bar:80"}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80", "fooC.bar:80"}); err != nil {
 		t.Fatal(err)
 	}
 	snap, err = snapshotter.servicesCache.GetSnapshot(nodeID)
@@ -352,8 +353,8 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 	}
 	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
 	// Requesting an empty list of resources package
-	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, []string{""}))
-	if err := snapshotter.updateNodeSnapshot(nodeID, resource.ListenerType, []string{""}); err != nil {
+	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{""}))
+	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{""}); err != nil {
 		t.Fatal(err)
 	}
 	snap, err = snapshotter.servicesCache.GetSnapshot(nodeID)

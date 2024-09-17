@@ -96,6 +96,7 @@ func TestSnapMetricsCollector(t *testing.T) {
 	tests := []struct {
 		name           string
 		nodeID         string
+		streamID       int64
 		nodeAddress    string
 		services       []*v1.Service
 		serviceStore   XdsServiceStore
@@ -106,6 +107,7 @@ func TestSnapMetricsCollector(t *testing.T) {
 		{
 			name:           "ok",
 			nodeID:         "test-node",
+			streamID:       int64(1),
 			nodeAddress:    "10.0.0.1",
 			services:       services,
 			serviceStore:   serviceStore,
@@ -132,11 +134,11 @@ func TestSnapMetricsCollector(t *testing.T) {
 			snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
 			snapshotter.SnapServices(tt.serviceStore)
 			snapshotter.SnapEndpoints(tt.endpointStore)
-			snapshotter.addNewNode(tt.nodeID, tt.nodeAddress)
-			if err := snapshotter.updateNodeSnapshot(tt.nodeID, resource.ListenerType, []string{expectHttpListenerName}); err != nil {
+			snapshotter.addOrUpdateNode(tt.nodeID, tt.nodeAddress, tt.streamID)
+			if err := snapshotter.updateStreamNodeResources(tt.nodeID, resource.ListenerType, tt.streamID, []string{expectHttpListenerName}); err != nil {
 				t.Fatal(err)
 			}
-			if err := snapshotter.updateNodeSnapshot(tt.nodeID, resource.ListenerType, []string{expectHttpsListenerName}); err != nil {
+			if err := snapshotter.updateStreamNodeResources(tt.nodeID, resource.ListenerType, tt.streamID, []string{expectHttpsListenerName}); err != nil {
 				t.Fatal(err)
 			}
 			body := promtest.Collect(t, newSnapMetricsCollector(snapshotter))
