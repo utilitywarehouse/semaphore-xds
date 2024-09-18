@@ -177,8 +177,6 @@ func (s *Snapshotter) NodesMap() map[string]string {
 // snapshots.
 func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	ctx := context.Background()
-	s.snapNodesMu.Lock()
-	defer s.snapNodesMu.Unlock()
 	cls, rds, lsnr, err := servicesToResources(serviceStore, "")
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
@@ -193,7 +191,8 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 		rds = append(rds, xdstpRDS...)
 		lsnr = append(lsnr, xdstpLSNR...)
 	}
-
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	atomic.AddInt32(&s.serviceSnapVersion, 1)
 	resources := map[string][]types.Resource{
 		resource.ClusterType:  cls,
@@ -234,8 +233,6 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 // endoints snapshots.
 func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	ctx := context.Background()
-	s.snapNodesMu.Lock()
-	defer s.snapNodesMu.Unlock()
 	eds, err := endpointSlicesToClusterLoadAssignments(endpointStore, "")
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
@@ -248,6 +245,8 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 		}
 		eds = append(eds, xdstpEDS...)
 	}
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	atomic.AddInt32(&s.endpointsSnapVersion, 1)
 	resources := map[string][]types.Resource{
 		resource.EndpointType: eds,
