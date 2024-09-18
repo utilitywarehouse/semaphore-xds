@@ -193,7 +193,7 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	}
 	s.snapNodesMu.Lock()
 	defer s.snapNodesMu.Unlock()
-	atomic.AddInt32(&s.serviceSnapVersion, 1)
+	s.serviceSnapVersion += int32(1)
 	resources := map[string][]types.Resource{
 		resource.ClusterType:  cls,
 		resource.ListenerType: lsnr,
@@ -247,7 +247,7 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	}
 	s.snapNodesMu.Lock()
 	defer s.snapNodesMu.Unlock()
-	atomic.AddInt32(&s.endpointsSnapVersion, 1)
+	s.endpointsSnapVersion += int32(1)
 	resources := map[string][]types.Resource{
 		resource.EndpointType: eds,
 	}
