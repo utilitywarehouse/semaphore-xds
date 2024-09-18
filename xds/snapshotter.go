@@ -403,8 +403,10 @@ func (s *Snapshotter) addOrUpdateNode(nodeID, address string, streamID int64) {
 	log.Logger.Info("New stream for node", "node", nodeID, "streamID", streamID)
 	nodeResources[streamID] = makeEmptyNodeResources()
 	updatedNode := &Node{
-		address:   node.address,
-		resources: nodeResources,
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
 	}
 	s.nodes.Store(nodeID, updatedNode)
 }
@@ -430,8 +432,10 @@ func (s *Snapshotter) deleteNodeStream(nodeID string, streamID int64) {
 	}
 	// else just update the node
 	updatedNode := &Node{
-		address:   node.address,
-		resources: nodeResources,
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
 	}
 	s.nodes.Store(nodeID, updatedNode)
 	if err := s.nodeServiceSnapshot(nodeID); err != nil {
@@ -510,8 +514,10 @@ func (s *Snapshotter) updateNodeStreamResources(nodeID, typeURL string, streamID
 	nodeResources[streamID].services[typeURL] = newSnapResources
 	nodeResources[streamID].servicesNames[typeURL] = resources
 	updatedNode := &Node{
-		address:   node.address,
-		resources: nodeResources,
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
 	}
 	s.nodes.Store(nodeID, updatedNode)
 	return nil
@@ -539,8 +545,10 @@ func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string,
 	nodeResources[streamID].endpoints[typeURL] = newSnapResources
 	nodeResources[streamID].endpointsNames[typeURL] = resources
 	updatedNode := &Node{
-		address:   node.address,
-		resources: nodeResources,
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
 	}
 	s.nodes.Store(nodeID, updatedNode)
 	return nil
