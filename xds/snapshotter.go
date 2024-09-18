@@ -81,26 +81,34 @@ type NodeSnapshotResources struct {
 
 // Deep copy function for Node resources
 func deepCopyNodeResources(src map[int64]*NodeSnapshotResources) map[int64]*NodeSnapshotResources {
-	dst := make(map[int64]*NodeSnapshotResources)
+	dst := make(map[int64]*NodeSnapshotResources, len(src))
+
+	copyMap := func(src, dst map[string][]types.Resource) {
+		for k, v := range src {
+			dst[k] = make([]types.Resource, len(v))
+			copy(dst[k], v)
+		}
+	}
+	copyStringMap := func(src, dst map[string][]string) {
+		for k, v := range src {
+			dst[k] = make([]string, len(v))
+			copy(dst[k], v)
+		}
+	}
+
 	for sID, resources := range src {
 		r := &NodeSnapshotResources{
-			services:       make(map[string][]types.Resource),
-			servicesNames:  make(map[string][]string),
-			endpoints:      make(map[string][]types.Resource),
-			endpointsNames: make(map[string][]string),
+			services:       make(map[string][]types.Resource, len(resources.services)),
+			servicesNames:  make(map[string][]string, len(resources.servicesNames)),
+			endpoints:      make(map[string][]types.Resource, len(resources.endpoints)),
+			endpointsNames: make(map[string][]string, len(resources.endpointsNames)),
 		}
-		for k, v := range resources.services {
-			r.services[k] = append(r.services[k], v...)
-		}
-		for k, v := range resources.servicesNames {
-			r.servicesNames[k] = append(r.servicesNames[k], v...)
-		}
-		for k, v := range resources.endpoints {
-			r.endpoints[k] = append(r.endpoints[k], v...)
-		}
-		for k, v := range resources.endpointsNames {
-			r.endpointsNames[k] = append(r.endpointsNames[k], v...)
-		}
+
+		copyMap(resources.services, r.services)
+		copyStringMap(resources.servicesNames, r.servicesNames)
+		copyMap(resources.endpoints, r.endpoints)
+		copyStringMap(resources.endpointsNames, r.endpointsNames)
+
 		dst[sID] = r
 	}
 	return dst
@@ -169,8 +177,6 @@ func (s *Snapshotter) NodesMap() map[string]string {
 // snapshots.
 func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	ctx := context.Background()
-	s.snapNodesMu.Lock()
-	defer s.snapNodesMu.Unlock()
 	cls, rds, lsnr, err := servicesToResources(serviceStore, "")
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot Services: %v", err)
@@ -181,15 +187,9 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 		if err != nil {
 			return fmt.Errorf("Failed to snapshot Services: %v", err)
 		}
-		for _, c := range xdstpCLS {
-			cls = append(cls, c)
-		}
-		for _, r := range xdstpRDS {
-			rds = append(rds, r)
-		}
-		for _, l := range xdstpLSNR {
-			lsnr = append(lsnr, l)
-		}
+		cls = append(cls, xdstpCLS...)
+		rds = append(rds, xdstpRDS...)
+		lsnr = append(lsnr, xdstpLSNR...)
 	}
 
 	atomic.AddInt32(&s.serviceSnapVersion, 1)
@@ -203,6 +203,8 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
@@ -229,8 +231,6 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 // endoints snapshots.
 func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	ctx := context.Background()
-	s.snapNodesMu.Lock()
-	defer s.snapNodesMu.Unlock()
 	eds, err := endpointSlicesToClusterLoadAssignments(endpointStore, "")
 	if err != nil {
 		return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
@@ -241,19 +241,22 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 		if err != nil {
 			return fmt.Errorf("Failed to snapshot EndpointSlices: %v", err)
 		}
-		for _, e := range xdstpEDS {
-			eds = append(eds, e)
-		}
+		eds = append(eds, xdstpEDS...)
 	}
 	atomic.AddInt32(&s.endpointsSnapVersion, 1)
 	resources := map[string][]types.Resource{
 		resource.EndpointType: eds,
 	}
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(s.endpointsSnapVersion), resources)
+	if err != nil {
+		return fmt.Errorf("Failed to create snapshot: %v", err)
+	}
 	err = s.endpointsCache.SetSnapshot(ctx, EmptyNodeID, snapshot)
 	if err != nil {
 		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
 	}
+	s.snapNodesMu.Lock()
+	defer s.snapNodesMu.Unlock()
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
