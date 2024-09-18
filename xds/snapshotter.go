@@ -556,6 +556,7 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 	node := n.(*Node)
 	atomic.AddInt32(&node.serviceSnapVersion, 1)
 	snapServices := aggregateNodeResources("services", node.resources)
+	log.Logger.Debug("Updating services snaphoshot", "node", nodeID, "resources", snapServices)
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.serviceSnapVersion), snapServices)
 	if err != nil {
 		return err
@@ -573,6 +574,7 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 	node := n.(*Node)
 	atomic.AddInt32(&node.endpointsSnapVersion, 1)
 	snapEndpoints := aggregateNodeResources("endpoints", node.resources)
+	log.Logger.Debug("Updating endpoints snaphoshot", "node", nodeID, "resources", snapEndpoints)
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.endpointsSnapVersion), snapEndpoints)
 	if err != nil {
 		return err
