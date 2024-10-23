@@ -1,0 +1,185 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    policies.kyverno.io/category: xDS
+    policies.kyverno.io/description: 'This policy ensures that pods labelled
+      with xds.semaphore.uw.systems/envoy-sidecar: "true" are injected with
+      an envoy sidecar to proxy grpc connections. It also points the rest of the
+      containers to semaphore-xds-localhost sys-semaphore service to get mock
+      xDS config that will point to a local port for envoy sidecar via gRPC
+      bootstrap conifg.'
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/title: Mutate Sempaphore-xDS Envoy Sidecar
+  name: mutate-semaphore-xds-envoy-sidecar
+spec:
+  admission: true
+  background: false
+  mutateExistingOnPolicyUpdate: false
+  rules:
+    - match:
+        resources:
+          kinds:
+            - Pod
+          operations:
+            - CREATE
+          selector:
+            matchLabels:
+              xds.semaphore.uw.systems/client: "envoy-sidecar"
+      mutate:
+        patchStrategicMerge:
+          spec:
+            initContainers:
+              - name: envoy-sidecar
+                image: envoyproxy/envoy:v1.33.0
+                imagePullPolicy: Always
+                restartPolicy: Always
+                startupProbe:
+                  httpGet:
+                    path: /ready
+                    port: 9902
+                  failureThreshold: 10
+                  periodSeconds: 1
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo '
+                    admin:
+                      address:
+                        socket_address: { address: 127.0.0.1, port_value: 9901 }
+                    static_resources:
+                      listeners:
+                      - name: listener_0
+                        address:
+                          socket_address:
+                            address: 127.0.0.1
+                            port_value: 18001
+                        filter_chains:
+                          - filters:
+                              - name: envoy.filters.network.http_connection_manager
+                                typed_config:
+                                  "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                                  stat_prefix: ingress_http
+                                  codec_type: AUTO
+                                  rds:
+                                    route_config_name: kube_dynamic
+                                    config_source:
+                                      resource_api_version: V3
+                                      api_config_source:
+                                        api_type: DELTA_GRPC
+                                        transport_api_version: V3
+                                        grpc_services:
+                                        - envoy_grpc:
+                                            cluster_name: xds_cluster
+                                  http_filters:
+                                    - name: envoy.filters.http.on_demand
+                                      typed_config:
+                                        "@type": type.googleapis.com/envoy.extensions.filters.http.on_demand.v3.OnDemand
+                                    - name: envoy.filters.http.router
+                                      typed_config:
+                                        "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      - name: listener_admin
+                        address:
+                          socket_address:
+                            address: 0.0.0.0
+                            port_value: 9902
+                        filter_chains:
+                          - filters:
+                              - name: envoy.filters.network.http_connection_manager
+                                typed_config:
+                                  "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                                  stat_prefix: ingress_http
+                                  route_config:
+                                    name: local_route
+                                    virtual_hosts:
+                                        name: local_service
+                                        domains:
+                                          - "*"
+                                        routes:
+                                          - match:
+                                              prefix: "/metrics"
+                                            route:
+                                                cluster: envoy_admin
+                                                prefix_rewrite: "/stats/prometheus"
+                                          - match:
+                                              prefix: "/ready"
+                                            route:
+                                                cluster: envoy_admin
+                                  http_filters:
+                                    - name: envoy.filters.http.router
+                                      typed_config:
+                                        "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      clusters:
+                      - name: xds_cluster
+                        connect_timeout: 0.25s
+                        type: STRICT_DNS
+                        lb_policy: ROUND_ROBIN
+                        typed_extension_protocol_options:
+                          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+                            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+                            explicit_http_config:
+                              http2_protocol_options:
+                                connection_keepalive:
+                                  interval: 30s
+                                  timeout: 5s
+                        upstream_connection_options:
+                          # configure a TCP keep-alive to detect and reconnect to the admin
+                          # server in the event of a TCP socket half open connection
+                          tcp_keepalive: {}
+                        load_assignment:
+                          cluster_name: xds_cluster
+                          endpoints:
+                          - lb_endpoints:
+                            - endpoint:
+                                address:
+                                  socket_address:
+                                    address: semaphore-xds.sys-semaphore.svc.cluster.local
+                                    port_value: 18000
+                      - name: envoy_admin
+                        connect_timeout: 0.25s
+                        type: STATIC
+                        load_assignment:
+                          cluster_name: envoy_admin
+                          endpoints:
+                          - lb_endpoints:
+                            - endpoint:
+                                address:
+                                  socket_address:
+                                    address: 127.0.0.1
+                                    port_value: 9901
+                    ' > /etc/envoy/config.yaml
+                    envoy -c /etc/envoy/config.yaml --service-node {{request.object.metadata.namespace}}/${POD_NAME} --service-cluster {{request.object.metadata.namespace}}/${POD_NAME} -l debug
+                env:
+                  - name: POD_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.name
+                volumeMounts:
+                  - mountPath: /etc/envoy
+                    name: envoy-config
+            containers:
+              - (name): "*"
+                env:
+                  - name: POD_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.name
+                  - name: GRPC_XDS_BOOTSTRAP_CONFIG
+                    value: |-
+                      {
+                        "xds_servers": [{
+                          "server_uri": "semaphore-xds-localhost.sys-semaphore.svc.cluster.local:18000",
+                          "channel_creds": [{"type": "insecure"}],
+                          "server_features": ["xds_v3"]}
+                        ],
+                        "node":{
+                          "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
+                          "locality":{}
+                        }
+                      }
+            volumes:
+              - emptyDir: {}
+                name: envoy-config
+      name: xds-clients-inject-envoy-sidecar
+      skipBackgroundRequests: true

@@ -20,7 +20,7 @@ func init() {
 }
 
 func TestSnapServices_EmptyServiceList(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	snapshotter.SnapServices(serviceStore)
 	snap, err := snapshotter.servicesCache.GetSnapshot(testNodeID)
@@ -34,7 +34,7 @@ func TestSnapServices_EmptyServiceList(t *testing.T) {
 }
 
 func TestSnapServices_SingleService(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -67,7 +67,7 @@ func TestSnapServices_SingleService(t *testing.T) {
 }
 
 func TestSnapServices_NoServicePorts(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -91,7 +91,7 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 }
 
 func TestSnapServices_MultipleServicePorts(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -128,7 +128,7 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 }
 
 func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	endpointStore := NewXdsEnpointStore()
 	snapshotter.SnapEndpoints(endpointStore)
 	snap, err := snapshotter.endpointsCache.GetSnapshot(testNodeID)
@@ -140,7 +140,7 @@ func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
 }
 
 func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	log.InitLogger("test-semaphore-xds", "debug")
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -159,7 +159,7 @@ func TestSnapEndpoints_MissingServiceOwnershipLabel(t *testing.T) {
 }
 
 func TestSnapEndpoints_UpdateAddress(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	// Create test EndpointSlice
 	httpPortName := "http"
 	httpPortValue := int32(80)
@@ -242,7 +242,7 @@ func TestSnapEndpoints_UpdateAddress(t *testing.T) {
 }
 
 func TestSnapServices_NodeSnapshotResources(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	// fooA.bar:80
 	svcA := &v1.Service{
@@ -366,7 +366,7 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 }
 
 func TestSnapServices_MultipleStreams(t *testing.T) {
-	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	// fooA.bar:80
 	svcA := &v1.Service{
@@ -459,7 +459,7 @@ func TestSnapServices_MultipleStreams(t *testing.T) {
 }
 
 func TestSnapServices_SingleServiceWithAuthoritySet(t *testing.T) {
-	snapshotter := NewSnapshotter("test-authority", uint(0), float64(0), float64(0))
+	snapshotter := NewSnapshotter("test-authority", uint(0), float64(0), float64(0), false)
 	serviceStore := NewXdsServiceStore()
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -504,7 +504,10 @@ func TestSnapServices_SingleServiceWithAuthoritySet(t *testing.T) {
 		}
 		assert.Contains(t, expectedClusters, cluster.Name)
 	}
-	expectedRoutes := []string{makeRouteConfigName("foo", "bar", int32(80)), makeXdstpRouteConfigName("foo", "bar", "test-authority", int32(80))}
+	expectedRoutes := []string{
+		makeRouteConfigName("foo", "bar", int32(80)),
+		makeXdstpRouteConfigName("foo", "bar", "test-authority", int32(80)),
+	}
 	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType)))
 	for _, res := range snap.GetResources(resource.RouteType) {
 		route, err := UnmarshalResourceToRouteConfiguration(res)

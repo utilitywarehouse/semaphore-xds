@@ -24,6 +24,7 @@ var (
 	flagNamespace                = flag.String("namespace", getEnv("SXDS_NAMESPACE", ""), "The namespace in which to watch for kubernetes resources")
 	flagLabelSelector            = flag.String("label-selector", getEnv("SXDS_LABEL_SELECTOR", "xds.semaphore.uw.systems/enabled=true"), "Label selector for watched kubernetes resources")
 	flagLbPolicyLabel            = flag.String("lb-policy-selector", getEnv("SXDS_LB_POLICY_SELECTOR", "xds.semaphore.uw.systems/lb-policy"), "Label to allow user to configure the lb policy for a Service clusters")
+	flagLocalhostEndpoints       = flag.Bool("localhost-endpoints", false, "If enabled the server will create configuration with dummy endpoints on 127.0.0.1:18001 for all requested listeners and clusters")
 	flagServerListenPort         = flag.Uint("server-listen-port", 18000, "xDS server listen port")
 	flagMaxRequestsPerSecond     = flag.Float64("max-requests-per-second", 500.0, "maximum allowed requests to the server per second")
 	flagMaxPeerRequestsPerSecond = flag.Float64("max-peer-requests-per-second", 50.0, "maximum allowed requests from a peer per second")
@@ -53,24 +54,27 @@ func main() {
 	controller.LbPolicyLabel = *flagLbPolicyLabel
 
 	localClient, remoteClients := createClientsFromConfig(*flagClustersConfigPath)
-	snapshotter := xds.NewSnapshotter(*flagAuthorityName, *flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond)
+	snapshotter := xds.NewSnapshotter(*flagAuthorityName, *flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond, *flagLocalhostEndpoints)
 	xds.InitSnapMetricsCollector(snapshotter)
-	go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
+	if !*flagLocalhostEndpoints {
+		go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
+	}
 	go servePprof(*flagPprofListenAddress)
 
-	controller := controller.NewController(
-		localClient,
-		remoteClients,
-		*flagNamespace,
-		*flagLabelSelector,
-		snapshotter,
-		0,
-	)
-	controller.Run()
+	if !*flagLocalhostEndpoints {
+		controller := controller.NewController(
+			localClient,
+			remoteClients,
+			*flagNamespace,
+			*flagLabelSelector,
+			snapshotter,
+			0,
+		)
+		controller.Run()
+		defer controller.Stop()
+	}
 
 	snapshotter.ListenAndServe()
-
-	controller.Stop()
 }
 
 func serveMetrics(address string) {
