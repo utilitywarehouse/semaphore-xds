@@ -56,7 +56,9 @@ func main() {
 	localClient, remoteClients := createClientsFromConfig(*flagClustersConfigPath)
 	snapshotter := xds.NewSnapshotter(*flagAuthorityName, *flagServerListenPort, *flagMaxRequestsPerSecond, *flagMaxPeerRequestsPerSecond, *flagLocalhostEndpoints)
 	xds.InitSnapMetricsCollector(snapshotter)
-	go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
+	if !!*flagLocalhostEndpoints {
+		go serveMetrics(fmt.Sprintf(":%s", *flagMetricsListenPort))
+	}
 	go servePprof(*flagPprofListenAddress)
 
 	if !*flagLocalhostEndpoints {
