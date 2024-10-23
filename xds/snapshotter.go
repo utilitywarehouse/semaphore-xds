@@ -9,7 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	endpointservice "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
@@ -59,6 +61,7 @@ type Snapshotter struct {
 	streams                sync.Map      // map of open streams
 	nodes                  sync.Map      // maps all clients node ids to requested resources that will be snapshotted and served
 	snapNodesMu            sync.Mutex    // Simple lock to avoid deleting a node while snapshotting
+	localhostEndpoints     bool
 }
 
 // Node keeps the info for a node. Each node can have multiple open streams,
@@ -127,7 +130,7 @@ func mapTypeURL(typeURL string) string {
 }
 
 // NewSnapshotter needs a grpc server port and the allowed requests limits per server and stream per second
-func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimit float64) *Snapshotter {
+func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimit float64, localhostEndpoints bool) *Snapshotter {
 	servicesCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger)
 	endpointsCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger) // This could be a linear cache? https://pkg.go.dev/github.com/envoyproxy/go-control-plane/pkg/cache/v3#LinearCache
 	muxCache := cache.MuxCache{
@@ -150,6 +153,7 @@ func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimi
 		muxCache:               muxCache,
 		requestRateLimit:       rate.NewLimiter(rate.Limit(requestLimit), 1),
 		streamRequestPerSecond: streamRequestLimit,
+		localhostEndpoints:     localhostEndpoints,
 	}
 }
 
@@ -506,9 +510,18 @@ func (s *Snapshotter) updateNodeStreamResources(nodeID, typeURL string, streamID
 		return fmt.Errorf("Cannot find service resources to update for node: %s in stream: %d context", nodeID, streamID)
 	}
 
-	newSnapResources, err := s.getResourcesFromCache(typeURL, resources)
-	if err != nil {
-		return fmt.Errorf("Cannot get resources from cache: %s", err)
+	var newSnapResources []types.Resource
+	var err error
+	if s.localhostEndpoints {
+		newSnapResources, err = s.makeDummyResources(typeURL, resources)
+		if err != nil {
+			return fmt.Errorf("Cannot make dummy resources for localhost mode: %s", err)
+		}
+	} else {
+		newSnapResources, err = s.getResourcesFromCache(typeURL, resources)
+		if err != nil {
+			return fmt.Errorf("Cannot get resources from cache: %s", err)
+		}
 	}
 
 	nodeResources[streamID].services[typeURL] = newSnapResources
@@ -537,9 +550,18 @@ func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string,
 		return fmt.Errorf("Cannot find endpoint resources to update for node: %s in stream: %d context", nodeID, streamID)
 	}
 
-	newSnapResources, err := s.getResourcesFromCache(typeURL, resources)
-	if err != nil {
-		return fmt.Errorf("Cannot get resources from cache: %s", err)
+	var newSnapResources []types.Resource
+	var err error
+	if s.localhostEndpoints {
+		newSnapResources, err = s.makeDummyResources(typeURL, resources)
+		if err != nil {
+			return fmt.Errorf("Cannot make dummy resources for localhost mode: %s", err)
+		}
+	} else {
+		newSnapResources, err = s.getResourcesFromCache(typeURL, resources)
+		if err != nil {
+			return fmt.Errorf("Cannot get resources from cache: %s", err)
+		}
 	}
 
 	nodeResources[streamID].endpoints[typeURL] = newSnapResources
@@ -609,6 +631,9 @@ func (s *Snapshotter) updateStreamNodeResources(nodeID, typeURL string, streamID
 // needToUpdateSnapshot checks id a node snapshot needs updating based on the requested resources
 // from the client inside a streams context
 func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int64, resources []string) bool {
+	if s.localhostEndpoints {
+		return true
+	} // Always update snapshot with the requested resources if we are on dummy mode
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		return false
@@ -626,6 +651,42 @@ func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int6
 		return !resourcesMatch(sNodeResources.endpointsNames[typeURL], resources)
 	}
 	return false
+}
+
+// makeDummyResources blindly creates default configuration resources to snapshot based on the requested names.
+// For endpoints it will create a single localhost one
+func (s *Snapshotter) makeDummyResources(typeURL string, resources []string) ([]types.Resource, error) {
+	res := []types.Resource{}
+	if typeURL == resource.ListenerType {
+		for _, r := range resources {
+			clusterName := strings.Replace(r, ":", ".", 1) // Replace expected format of name.namespace:port -> name.namespace.port to match cluster names due to xds naming
+			routeConfig := routeConfig(r, clusterName, r, []string{r}, nil, []*routev3.RouteAction_HashPolicy{})
+			manager, err := makeManager(routeConfig)
+			if err != nil {
+				log.Logger.Error("Cannot create listener manager", "error", err)
+				continue
+			}
+			res = append(res, listener(r, manager))
+		}
+	}
+	if typeURL == resource.RouteType {
+		for _, r := range resources {
+			clusterName := strings.Replace(r, ":", ".", 1) // Replace expected format of name.namespace:port -> name.namespace.port to match cluster names due to xds naming
+			res = append(res, routeConfig(r, clusterName, r, []string{r}, nil, []*routev3.RouteAction_HashPolicy{}))
+		}
+	}
+	if typeURL == resource.ClusterType {
+		for _, r := range resources {
+			res = append(res, cluster(r, clusterv3.Cluster_ROUND_ROBIN))
+		}
+	}
+	if typeURL == resource.EndpointType {
+		for _, r := range resources {
+			res = append(res, localhostClusterLoadAssignment(r))
+		}
+	}
+
+	return []types.Resource{}, nil
 }
 
 // ListenAndServeFromCache will start an xDS server at the given port and serve
