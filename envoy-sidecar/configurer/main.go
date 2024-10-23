@@ -8,7 +8,7 @@ import (
 
 var (
 	flagEnvoyNodeId         = flag.String("envoy-node-id", getEnv("ENVOY_NODE_ID", ""), "Node id to configure for envoy sidecar")
-	flagEnvoySidecarTargets = flag.String("envoy-sidecar-targets", getEnv("ENVOY_SIDECAR_TARGETS", ""), "Map of xds listener addresses to local ports in the form: <xds-listener-1>=<local-port1>,<xds-listener-2>=<local-port2>")
+	flagEnvoySidecarTargets = flag.String("envoy-sidecar-targets", getEnv("ENVOY_SIDECAR_TARGETS", ""), "Comma separated list of listeners to get xDS config for: <xds-listener-1>,<xds-listener-2>")
 	flagXdsServerAddress    = flag.String("xds-server-address", getEnv("XDS_SERVER_ADDRESS", ""), "The address of the xds server for envoy sidecar to fetch config")
 	flagXdsServerPort       = flag.String("xds-server-port", getEnv("XDS_SERVER_PORT", ""), "The port of the xds server for envoy sidecar to fetch config")
 )

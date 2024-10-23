@@ -1,9 +1,9 @@
-{{- range . }}
-  - name: {{ .Name }}
+  - name: listener_0
     address:
-      socket_address: { address: 127.0.0.1, port_value: {{ .LocalListenerPort}} }
+      socket_address: { address: 127.0.0.1, port_value: 18001 }
     filter_chains:
     - filters:
+    {{- range . }}
       - name: envoy.filters.network.http_connection_manager
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
@@ -24,4 +24,4 @@
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
               dynamic_stats: true
-{{- end }}
+    {{- end }}

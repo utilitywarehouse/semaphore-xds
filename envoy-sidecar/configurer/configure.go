@@ -8,9 +8,7 @@ import (
 )
 
 type Listener struct {
-	Name              string
-	LocalListenerPort string
-	RouteConfigName   string
+	RouteConfigName string
 }
 
 type Cluster struct {
@@ -95,8 +93,8 @@ func makeEnvoyConfig(nodeID, envoySidecarTargets, XdsServerAddress, XdsServerPor
 	return renderedEnvoyConfig.String(), nil
 }
 
-// List expected in the form:
-// <xds-address1>=<local-port1>,<xds-address2>=<local-port2>
+// List expected upstream listeners in the form:
+// <xds-address1>,<xds-address2>,<xds-address2>
 // From this we should extract the xds addresses as listerner and route config
 // names.
 // XdsAddress is expected in the name that semaphore-xds would configure
@@ -107,16 +105,13 @@ func makeEnvoyConfig(nodeID, envoySidecarTargets, XdsServerAddress, XdsServerPor
 func extractConfigFromTargets(envoySidecarTargets string) ([]Listener, []Cluster) {
 	listeners := []Listener{}
 	for _, target := range strings.Split(envoySidecarTargets, ",") {
-		t := strings.Split(target, "=")
 		listeners = append(listeners, Listener{
-			Name:              t[0],
-			RouteConfigName:   t[0],
-			LocalListenerPort: t[1],
+			RouteConfigName: target,
 		})
 	}
 	clusters := []Cluster{}
 	for _, l := range listeners {
-		clusterName := strings.Join(strings.Split(l.Name, ":"), ".")
+		clusterName := strings.Join(strings.Split(l.RouteConfigName, ":"), ".")
 		clusters = append(clusters, Cluster{
 			Name: clusterName,
 		})
