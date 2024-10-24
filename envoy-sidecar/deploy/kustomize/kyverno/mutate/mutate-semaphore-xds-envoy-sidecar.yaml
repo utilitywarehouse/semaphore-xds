@@ -51,6 +51,7 @@ spec:
               - -c
               - |
                 /semaphore-xds-envoy-configurer > /etc/envoy/config.yaml
+                cat /etc/envoy/config.yaml
               volumeMounts:
                 - name: envoy-config
                   mountPath: /etc/envoy

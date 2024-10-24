@@ -517,6 +517,7 @@ func (s *Snapshotter) updateNodeStreamResources(nodeID, typeURL string, streamID
 		if err != nil {
 			return fmt.Errorf("Cannot make dummy resources for localhost mode: %s", err)
 		}
+		log.Logger.Debug("Created dummy resources", "type", typeURL, "resources", newSnapResources, "count", len(newSnapResources))
 	} else {
 		newSnapResources, err = s.getResourcesFromCache(typeURL, resources)
 		if err != nil {
@@ -532,6 +533,7 @@ func (s *Snapshotter) updateNodeStreamResources(nodeID, typeURL string, streamID
 		serviceSnapVersion:   node.serviceSnapVersion,
 		endpointsSnapVersion: node.endpointsSnapVersion,
 	}
+	log.Logger.Debug("Updating node resources", "node", nodeID, "type", typeURL, "resources", updatedNode.resources[streamID].services[typeURL])
 	s.nodes.Store(nodeID, updatedNode)
 	return nil
 }
@@ -557,6 +559,7 @@ func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string,
 		if err != nil {
 			return fmt.Errorf("Cannot make dummy resources for localhost mode: %s", err)
 		}
+		log.Logger.Debug("Created dummy resources", "type", typeURL, "resources", newSnapResources, "count", len(newSnapResources))
 	} else {
 		newSnapResources, err = s.getResourcesFromCache(typeURL, resources)
 		if err != nil {
@@ -590,6 +593,9 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 	if err != nil {
 		return err
 	}
+	for t, r := range snapServices {
+		log.Logger.Debug("Updating node snapshot", "node", nodeID, "typeURL", t, "resources", r)
+	}
 	return s.servicesCache.SetSnapshot(ctx, nodeID, snapshot)
 }
 
@@ -606,6 +612,9 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.endpointsSnapVersion), snapEndpoints)
 	if err != nil {
 		return err
+	}
+	for t, r := range snapEndpoints {
+		log.Logger.Debug("Updating node snapshot", "node", nodeID, "typeURL", t, "resources", r)
 	}
 	return s.endpointsCache.SetSnapshot(ctx, nodeID, snapshot)
 }
@@ -659,6 +668,7 @@ func (s *Snapshotter) makeDummyResources(typeURL string, resources []string) ([]
 	res := []types.Resource{}
 	if typeURL == resource.ListenerType {
 		for _, r := range resources {
+			log.Logger.Debug("Creating dummy listener resource", "name", r)
 			clusterName := strings.Replace(r, ":", ".", 1) // Replace expected format of name.namespace:port -> name.namespace.port to match cluster names due to xds naming
 			routeConfig := routeConfig(r, clusterName, r, []string{r}, nil, []*routev3.RouteAction_HashPolicy{})
 			manager, err := makeManager(routeConfig)
@@ -671,17 +681,20 @@ func (s *Snapshotter) makeDummyResources(typeURL string, resources []string) ([]
 	}
 	if typeURL == resource.RouteType {
 		for _, r := range resources {
+			log.Logger.Debug("Creating dummy routeConfig resource", "name", r)
 			clusterName := strings.Replace(r, ":", ".", 1) // Replace expected format of name.namespace:port -> name.namespace.port to match cluster names due to xds naming
 			res = append(res, routeConfig(r, clusterName, r, []string{r}, nil, []*routev3.RouteAction_HashPolicy{}))
 		}
 	}
 	if typeURL == resource.ClusterType {
 		for _, r := range resources {
+			log.Logger.Debug("Creating dummy cluster resource", "name", r)
 			res = append(res, cluster(r, clusterv3.Cluster_ROUND_ROBIN))
 		}
 	}
 	if typeURL == resource.EndpointType {
 		for _, r := range resources {
+			log.Logger.Debug("Creating dummy ClusterLoadAssignment resource", "name", r)
 			res = append(res, localhostClusterLoadAssignment(r))
 		}
 	}
