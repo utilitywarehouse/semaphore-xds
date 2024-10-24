@@ -640,9 +640,6 @@ func (s *Snapshotter) updateStreamNodeResources(nodeID, typeURL string, streamID
 // needToUpdateSnapshot checks id a node snapshot needs updating based on the requested resources
 // from the client inside a streams context
 func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int64, resources []string) bool {
-	if s.localhostEndpoints {
-		return true
-	} // Always update snapshot with the requested resources if we are on dummy mode
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		return false
