@@ -668,38 +668,33 @@ func (s *Snapshotter) makeDummyResources(typeURL string, resources []string) ([]
 	res := []types.Resource{}
 	if typeURL == resource.ListenerType {
 		for _, r := range resources {
-			log.Logger.Debug("Creating dummy listener resource", "name", r)
 			clusterName := strings.Replace(r, ":", ".", 1) // Replace expected format of name.namespace:port -> name.namespace.port to match cluster names due to xds naming
 			routeConfig := routeConfig(r, clusterName, r, []string{r}, nil, []*routev3.RouteAction_HashPolicy{})
 			manager, err := makeManager(routeConfig)
 			if err != nil {
-				log.Logger.Error("Cannot create listener manager", "error", err)
-				continue
+				return res, fmt.Errorf("Cannot generate listener manager: %v", err)
 			}
-			res = append(res, listener(r, manager))
+			l := listener(r, manager)
+			res = append(res, l)
 		}
 	}
 	if typeURL == resource.RouteType {
 		for _, r := range resources {
-			log.Logger.Debug("Creating dummy routeConfig resource", "name", r)
 			clusterName := strings.Replace(r, ":", ".", 1) // Replace expected format of name.namespace:port -> name.namespace.port to match cluster names due to xds naming
 			res = append(res, routeConfig(r, clusterName, r, []string{r}, nil, []*routev3.RouteAction_HashPolicy{}))
 		}
 	}
 	if typeURL == resource.ClusterType {
 		for _, r := range resources {
-			log.Logger.Debug("Creating dummy cluster resource", "name", r)
 			res = append(res, cluster(r, clusterv3.Cluster_ROUND_ROBIN))
 		}
 	}
 	if typeURL == resource.EndpointType {
 		for _, r := range resources {
-			log.Logger.Debug("Creating dummy ClusterLoadAssignment resource", "name", r)
 			res = append(res, localhostClusterLoadAssignment(r))
 		}
 	}
-
-	return []types.Resource{}, nil
+	return res, nil
 }
 
 // ListenAndServeFromCache will start an xDS server at the given port and serve
