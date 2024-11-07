@@ -62,6 +62,43 @@ spec:
             description: XdsServiceSpec defines the desired config for a service served
               via xDS
             properties:
+              circuitBreakers:
+                description: |-
+                  CircuitBreakers define limits for client upstream connections to the
+                  service servers.
+                properties:
+                  thresholds:
+                    description: Specifies limits which apply to each all hosts in
+                      a cluster.
+                    properties:
+                      maxConnections:
+                        description: |-
+                          The maximum number of connections that the client will make to the
+                          upstream cluster. If not specified, the default is 1024.
+                        format: int32
+                        type: integer
+                      maxPendingRequests:
+                        description: |-
+                          The maximum number of pending requests that the client will allow to
+                          the upstream cluster. If not specified, the default is 1024.
+                          This limit is applied as a connection limit for non-HTTP traffic.
+                        format: int32
+                        type: integer
+                      maxRequests:
+                        description: |-
+                          The maximum number of parallel requests the client will make to the
+                          upstream cluster. If not specified, the default is 1024.
+                          This limit does not apply to non-HTTP traffic.
+                        format: int32
+                        type: integer
+                      maxRetries:
+                        description: |-
+                          The maximum number of parallel retries that the client will allow to
+                          the upstream cluster. If not specified, the default is 3.
+                        format: int32
+                        type: integer
+                    type: object
+                type: object
               enableRemoteEndpoints:
                 default: false
                 description: |-

@@ -267,6 +267,13 @@ func ParseRetryBackOff(base, max string) *routev3.RetryPolicy_RetryBackOff {
 	}
 }
 
+func ParseCircuitBreakerAttribute(a *uint32) *wrappers.UInt32Value {
+	if a == nil {
+		return nil
+	}
+	return &wrappers.UInt32Value{Value: *a}
+}
+
 // resourcesMatch checks if 2 slices contain the same set of resources
 func resourcesMatch(a, b []string) bool {
 	if len(a) != len(b) {

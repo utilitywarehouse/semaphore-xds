@@ -5,6 +5,7 @@ import (
 	"time"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	v1 "k8s.io/api/core/v1"
@@ -209,6 +210,7 @@ func (c *Controller) servicesToXdsServiceStore() (xds.XdsServiceStore, error) {
 		policy := xds.ParseToClusterLbPolicy(xdsSvc.Spec.LoadBalancing.Policy)
 
 		store.AddOrUpdate(svc, xds.Service{
+			CircuitBreakers:          extractCircuitBreakers(xdsSvc.Spec.CircuitBreakers),
 			EnableRemoteEndpoints:    pointer.BoolDeref(xdsSvc.Spec.EnableRemoteEndpoints, false),
 			Policy:                   policy,
 			RingHash:                 extractRingHashConfig(policy, xdsSvc.Spec.LoadBalancing.RingHash),
@@ -345,5 +347,25 @@ func extractRetryPolicy(policy *v1alpha1.XdsServiceSpecRetry) *routev3.RetryPoli
 		RetryOn:      xds.ParseRetryOn(policy.RetryOn),
 		NumRetries:   xds.ParseNumRetries(policy.NumRetries),
 		RetryBackOff: xds.ParseRetryBackOff(policy.RetryBackOff.BaseInterval, policy.RetryBackOff.MaxInterval),
+	}
+}
+
+func extractCircuitBreakers(circuitbreakers *v1alpha1.XdsServiceSpecCircuitBreakers) *clusterv3.CircuitBreakers {
+	if circuitbreakers == nil {
+		return nil
+	}
+	if circuitbreakers.Thresholds == nil {
+		return nil
+	}
+	return &clusterv3.CircuitBreakers{
+		Thresholds: []*clusterv3.CircuitBreakers_Thresholds{
+			&clusterv3.CircuitBreakers_Thresholds{
+				Priority:           corev3.RoutingPriority_DEFAULT,
+				MaxConnections:     xds.ParseCircuitBreakerAttribute(circuitbreakers.Thresholds.MaxConnections),
+				MaxPendingRequests: xds.ParseCircuitBreakerAttribute(circuitbreakers.Thresholds.MaxPendingRequests),
+				MaxRequests:        xds.ParseCircuitBreakerAttribute(circuitbreakers.Thresholds.MaxRequests),
+				MaxRetries:         xds.ParseCircuitBreakerAttribute(circuitbreakers.Thresholds.MaxRetries),
+			},
+		},
 	}
 }
