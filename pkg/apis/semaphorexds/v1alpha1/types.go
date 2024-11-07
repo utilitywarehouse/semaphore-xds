@@ -72,8 +72,38 @@ type XdsServiceSpecRetry struct {
 	RetryBackOff XdsServiceSpecRetryBackoffPolicy `json:"backoff,omitempty"`
 }
 
+// XdsServiceSpecCircuitBreakersThresholds defines threshold values for targets
+// of all priorities
+type XdsServiceSpecCircuitBreakersThresholds struct {
+	// The maximum number of connections that the client will make to the
+	// upstream cluster. If not specified, the default is 1024.
+	MaxConnections *uint32 `json:"maxConnections,omitempty"`
+	// The maximum number of pending requests that the client will allow to
+	// the upstream cluster. If not specified, the default is 1024.
+	// This limit is applied as a connection limit for non-HTTP traffic.
+	MaxPendingRequests *uint32 `json:"maxPendingRequests,omitempty"`
+	// The maximum number of parallel requests the client will make to the
+	// upstream cluster. If not specified, the default is 1024.
+	// This limit does not apply to non-HTTP traffic.
+	MaxRequests *uint32 `json:"maxRequests,omitempty"`
+	// The maximum number of parallel retries that the client will allow to
+	// the upstream cluster. If not specified, the default is 3.
+	MaxRetries *uint32 `json:"maxRetries,omitempty"`
+}
+
+// XdsServiceSpecCircuitBreakers defines circuit breaker values for upstream
+// client connections to target servers
+type XdsServiceSpecCircuitBreakers struct {
+	// Specifies limits which apply to each all hosts in a cluster.
+	Thresholds *XdsServiceSpecCircuitBreakersThresholds `json:"thresholds,omitempty"`
+}
+
 // XdsServiceSpec defines the desired config for a service served via xDS
 type XdsServiceSpec struct {
+	// CircuitBreakers define limits for client upstream connections to the
+	// service servers.
+	// +optional
+	CircuitBreakers *XdsServiceSpecCircuitBreakers `json:"circuitBreakers,omitempty"`
 	// EnableRemoteEndpoints determines whether this Service should look for
 	// endpoints (EndpointSlices) in remote clusters.
 	// +optional

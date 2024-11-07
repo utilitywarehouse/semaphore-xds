@@ -22,6 +22,7 @@ import (
 // Service holds the data we need to represent a Kubernetes Service in xds
 // configuration
 type Service struct {
+	CircuitBreakers          *clusterv3.CircuitBreakers
 	EnableRemoteEndpoints    bool
 	Policy                   clusterv3.Cluster_LbPolicy
 	RingHash                 *clusterv3.Cluster_RingHashLbConfig
@@ -150,7 +151,7 @@ func makeListener(name, namespace, authority string, port int32, manager *anypb.
 	}
 }
 
-func makeCluster(name, namespace, authority string, port int32, policy clusterv3.Cluster_LbPolicy, ringHash *clusterv3.Cluster_RingHashLbConfig) *clusterv3.Cluster {
+func makeCluster(name, namespace, authority string, port int32, policy clusterv3.Cluster_LbPolicy, ringHash *clusterv3.Cluster_RingHashLbConfig, cbs *clusterv3.CircuitBreakers) *clusterv3.Cluster {
 	clusterName := makeClusterName(name, namespace, port)
 	if authority != "" {
 		clusterName = makeXdstpClusterName(name, namespace, authority, port)
@@ -158,6 +159,7 @@ func makeCluster(name, namespace, authority string, port int32, policy clusterv3
 	cluster := &clusterv3.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
+		CircuitBreakers:      cbs,
 		LbPolicy:             policy,
 		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
 			EdsConfig: &corev3.ConfigSource{
@@ -201,7 +203,7 @@ func servicesToResources(serviceStore XdsServiceStore, authority string) ([]type
 			}
 			listener := makeListener(s.Service.Name, s.Service.Namespace, authority, port.Port, manager)
 			lsnr = append(lsnr, listener)
-			cluster := makeCluster(s.Service.Name, s.Service.Namespace, authority, port.Port, s.Policy, s.RingHash)
+			cluster := makeCluster(s.Service.Name, s.Service.Namespace, authority, port.Port, s.Policy, s.RingHash, s.CircuitBreakers)
 			cls = append(cls, cluster)
 		}
 	}
