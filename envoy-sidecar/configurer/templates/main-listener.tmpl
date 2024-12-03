@@ -1,24 +1,20 @@
-  - name: listener_0
+  - name: listener_main
     address:
-      socket_address: { address: 127.0.0.1, port_value: 18001 }
+      socket_address: { address: 127.0.0.1, port_value: {{ .Port }} }
     filter_chains:
     - filters:
-    {{- range . }}
       - name: envoy.filters.network.http_connection_manager
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
           stat_prefix: ingress_http
-          codec_type: AUTO
-          rds:
-            route_config_name: {{ .RouteConfigName }}
-            config_source:
-              resource_api_version: V3
-              api_config_source:
-                api_type: GRPC
-                transport_api_version: V3
-                grpc_services:
-                - envoy_grpc:
-                    cluster_name: xds_cluster
+          route_config:
+            virtual_hosts:
+            {{- range .Domains }}
+            - name: {{ .Name }}
+              domains: ["{{ .Domain }}"]
+              routes:
+              - match: { prefix: "/" }
+                redirect: { port_redirect: {{ .Port }} }
           http_filters:
           - name: envoy.filters.http.router
             typed_config:

@@ -6,6 +6,7 @@ node:
   cluster: {{ .ClusterID }}
 static_resources:
   listeners:
+{{ .MainListener }}
 {{ .Listeners }}
   clusters:
 {{- .Clusters }}
