@@ -230,3 +230,9 @@ func endpointSlicesToClusterLoadAssignments(endpointStore XdsEndpointStore, auth
 	}
 	return eds, nil
 }
+
+func localhostClusterLoadAssignment(clusterName string) *endpointv3.ClusterLoadAssignment {
+	endpoints := []*endpointv3.LbEndpoint{lbEndpoint("127.0.0.1", int32(18001), true)}
+	localityEndpoint := []*endpointv3.LocalityLbEndpoints{localityEndpoints(endpoints, "localhost", "localhost", uint32(0))}
+	return clusterLoadAssignment(clusterName, localityEndpoint)
+}

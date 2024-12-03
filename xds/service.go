@@ -93,6 +93,9 @@ func makeRouteConfig(name, namespace, authority string, port int32, retry *route
 		virtualHostName = makeXdstpVirtualHostName(name, namespace, authority, port)
 		domains = append(domains, virtualHostName)
 	}
+	return routeConfig(routeName, clusterName, virtualHostName, domains, retry, hashPolicies)
+}
+func routeConfig(routeName, clusterName, virtualHostName string, domains []string, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: routeName,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -142,6 +145,10 @@ func makeListener(name, namespace, authority string, port int32, manager *anypb.
 	if authority != "" {
 		listenerName = makeXdstpListenerName(name, namespace, authority, port)
 	}
+	return listener(listenerName, manager)
+}
+
+func listener(listenerName string, manager *anypb.Any) *listenerv3.Listener {
 	return &listenerv3.Listener{
 		Name: listenerName,
 		ApiListener: &listenerv3.ApiListener{
@@ -155,19 +162,8 @@ func makeCluster(name, namespace, authority string, port int32, policy clusterv3
 	if authority != "" {
 		clusterName = makeXdstpClusterName(name, namespace, authority, port)
 	}
-	cluster := &clusterv3.Cluster{
-		Name:                 clusterName,
-		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
-		LbPolicy:             policy,
-		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
-			EdsConfig: &corev3.ConfigSource{
-				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
-					Ads: &corev3.AggregatedConfigSource{},
-				},
-			},
-		},
-	}
 
+	cluster := cluster(clusterName, policy)
 	if authority != "" {
 		// This will be the name of the subsequently requested ClusterLoadAssignment. We need to set this
 		// to the cluster name to hit resources in the cache and reply to EDS requests
@@ -182,6 +178,21 @@ func makeCluster(name, namespace, authority string, port int32, policy clusterv3
 	}
 
 	return cluster
+}
+
+func cluster(clusterName string, policy clusterv3.Cluster_LbPolicy) *clusterv3.Cluster {
+	return &clusterv3.Cluster{
+		Name:                 clusterName,
+		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
+		LbPolicy:             policy,
+		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
+			EdsConfig: &corev3.ConfigSource{
+				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
+					Ads: &corev3.AggregatedConfigSource{},
+				},
+			},
+		},
+	}
 }
 
 // servicesToResources will return a set of listener, routeConfiguration and
