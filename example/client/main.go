@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	echo "github.com/utilitywarehouse/semaphore-xds/example/client/echo"
@@ -14,17 +14,25 @@ import (
 )
 
 var (
-	flagGrpcServerAddress = flag.String("grpc-server-address", "", "Echo server address")
+	flagGrpcServerAddresses = flag.String("grpc-server-addresses", "", "Comma separated echo server address")
 )
 
 func main() {
 	flag.Parse()
-	if *flagGrpcServerAddress == "" {
-		log.Fatal("Must provide a grpc server address")
+	if *flagGrpcServerAddresses == "" {
+		log.Fatal("Must provide at least one grpc server address")
 	}
-	log.Println("Looking up service %s", *flagGrpcServerAddress)
+	servers := strings.Split(*flagGrpcServerAddresses, ",")
 
-	address := fmt.Sprintf(*flagGrpcServerAddress)
+	for _, server := range servers {
+		go callEchoServer(server)
+	}
+	for { // so bad..
+	}
+}
+
+func callEchoServer(address string) {
+	log.Println("Looking up service %s", address)
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Could not connect %v", err)
