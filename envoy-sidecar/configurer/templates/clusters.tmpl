@@ -1,4 +1,4 @@
-{{- range . }}
+{{- range .Dynamic }}
   - name: {{ .Name }}
     http2_protocol_options: {}
     type: EDS
@@ -11,4 +11,18 @@
           grpc_services:
             - envoy_grpc:
                 cluster_name: xds_cluster
+{{- end }}
+{{- range .Static }}
+  - name: {{ .Name }}
+    connect_timeout: 5s
+    type: STATIC
+    load_assignment:
+      cluster_name: {{ .Name }}
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: 127.0.0.1
+                    port_value: {{ .Port }}
 {{- end }}

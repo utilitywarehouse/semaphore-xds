@@ -13,8 +13,10 @@
             - name: {{ .Name }}
               domains: ["{{ .Domain }}"]
               routes:
-              - match: { prefix: "" }
-                redirect: { port_redirect: {{ .Port }} }
+              - match:
+                  prefix: ""
+                route:
+                  cluster: {{ .Cluster }}
             {{- end }}
           http_filters:
           - name: envoy.filters.http.router

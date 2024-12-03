@@ -18,9 +18,10 @@ type MainListener struct {
 }
 
 type RouteDomain struct {
-	Name   string
-	Domain string
-	Port   int
+	Cluster string
+	Domain  string
+	Name    string
+	Port    int
 }
 type TargetListener struct {
 	Name            string
@@ -28,8 +29,18 @@ type TargetListener struct {
 	RouteConfigName string
 }
 
-type Cluster struct {
+type StaticCluster struct {
 	Name string
+	Port int
+}
+
+type DynamicCluster struct {
+	Name string
+}
+
+type Clusters struct {
+	Dynamic []DynamicCluster
+	Static  []StaticCluster
 }
 
 type XdsCluster struct {
@@ -133,13 +144,14 @@ func makeEnvoyConfig(nodeID, envoySidecarTargets, XdsServerAddress, XdsServerPor
 // and routeConfig names. Clusters names should be derived from the above and
 // follow the form: service.namespace.port to comply with the xds naming
 // limitations and how semaphore-xds configures cluster names.
-func extractConfigFromTargets(envoySidecarTargets string) (MainListener, []TargetListener, []Cluster) {
+func extractConfigFromTargets(envoySidecarTargets string) (MainListener, []TargetListener, Clusters) {
 	port := EnvoyMainListenPort
 	main := MainListener{
 		Port: port,
 	}
 	domains := []RouteDomain{}
 	listeners := []TargetListener{}
+	staticClusters := []StaticCluster{}
 	for _, target := range strings.Split(envoySidecarTargets, ",") {
 		port++
 		lName := fmt.Sprintf("listener_%d", port)
@@ -149,20 +161,30 @@ func extractConfigFromTargets(envoySidecarTargets string) (MainListener, []Targe
 			RouteConfigName: target,
 		})
 		rName := fmt.Sprintf("route_%d", port)
+		cName := fmt.Sprintf("localhost_%d", port)
 		domains = append(domains, RouteDomain{
-			Name:   rName,
-			Domain: target,
-			Port:   port,
+			Cluster: cName,
+			Domain:  target,
+			Name:    rName,
+			Port:    port,
+		})
+		staticClusters = append(staticClusters, StaticCluster{
+			Name: cName,
+			Port: port,
 		})
 	}
 	main.Domains = domains
 
-	clusters := []Cluster{}
+	dynamicClusters := []DynamicCluster{}
 	for _, l := range listeners {
 		clusterName := strings.Join(strings.Split(l.RouteConfigName, ":"), ".")
-		clusters = append(clusters, Cluster{
+		dynamicClusters = append(dynamicClusters, DynamicCluster{
 			Name: clusterName,
 		})
+	}
+	clusters := Clusters{
+		Dynamic: dynamicClusters,
+		Static:  staticClusters,
 	}
 	return main, listeners, clusters
 }
