@@ -95,6 +95,7 @@ func makeRouteConfig(name, namespace, authority string, port int32, retry *route
 	}
 	return routeConfig(routeName, clusterName, virtualHostName, domains, retry, hashPolicies)
 }
+
 func routeConfig(routeName, clusterName, virtualHostName string, domains []string, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: routeName,
@@ -121,6 +122,47 @@ func routeConfig(routeName, clusterName, virtualHostName string, domains []strin
 			},
 		},
 	}
+}
+
+// makeAllKubeServicesRouteConfig will return all the available routes in a
+// Kubernetes cluster. It is meant to be combined with envoy clients that will
+// also configure on-demand CDS and EDS for lazy resources discovery.
+func makeAllKubeServicesRouteConfig(serviceStore XdsServiceStore) *routev3.RouteConfiguration {
+	vh := []*routev3.VirtualHost{}
+	for _, s := range serviceStore.All() {
+		for _, port := range s.Service.Spec.Ports {
+			clusterName := makeClusterName(s.Service.Name, s.Service.Namespace, port.Port)
+			virtualHostName := makeVirtualHostName(s.Service.Name, s.Service.Namespace, port.Port)
+			domains := []string{makeGlobalServiceDomain(s.Service.Name, s.Service.Namespace, port.Port)}
+			vh = append(vh, &routev3.VirtualHost{
+				Name:    virtualHostName,
+				Domains: domains,
+				Routes: []*routev3.Route{{
+					Match: &routev3.RouteMatch{
+						PathSpecifier: &routev3.RouteMatch_Prefix{
+							Prefix: "",
+						},
+					},
+					Action: &routev3.Route_Route{
+						Route: &routev3.RouteAction{
+							ClusterSpecifier: &routev3.RouteAction_Cluster{
+								Cluster: clusterName,
+							},
+							HashPolicy: s.RingHashPolicies,
+						},
+					},
+				}},
+				RetryPolicy: s.Retry,
+			})
+		}
+	}
+	if len(vh) > 0 {
+		return &routev3.RouteConfiguration{
+			Name:         "all_kube_routes",
+			VirtualHosts: vh,
+		}
+	}
+	return nil
 }
 
 func makeManager(routeConfig *routev3.RouteConfiguration) (*anypb.Any, error) {
@@ -215,6 +257,9 @@ func servicesToResources(serviceStore XdsServiceStore, authority string) ([]type
 			cluster := makeCluster(s.Service.Name, s.Service.Namespace, authority, port.Port, s.Policy, s.RingHash)
 			cls = append(cls, cluster)
 		}
+	}
+	if allKubeRoutes := makeAllKubeServicesRouteConfig(serviceStore); allKubeRoutes != nil {
+		rds = append(rds, allKubeRoutes)
 	}
 	return cls, rds, lsnr, nil
 }
