@@ -227,6 +227,7 @@ func cluster(clusterName string, policy clusterv3.Cluster_LbPolicy) *clusterv3.C
 		Name:                 clusterName,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
 		LbPolicy:             policy,
+		Http2ProtocolOptions: &corev3.Http2ProtocolOptions{}, // Set so that Envoy will assume that the upstream supports HTTP/2
 		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
 			EdsConfig: &corev3.ConfigSource{
 				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
