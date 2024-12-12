@@ -873,6 +873,7 @@ func registerServices(grpcServer *grpc.Server, xdsServer xds.Server) {
 	endpointservice.RegisterEndpointDiscoveryServiceServer(grpcServer, xdsServer)
 	clusterservice.RegisterClusterDiscoveryServiceServer(grpcServer, xdsServer)
 	routeservice.RegisterRouteDiscoveryServiceServer(grpcServer, xdsServer)
+	routeservice.RegisterVirtualHostDiscoveryServiceServer(grpcServer, xdsServer)
 	listenerservice.RegisterListenerDiscoveryServiceServer(grpcServer, xdsServer)
 }
 

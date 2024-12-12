@@ -60,7 +60,7 @@ func TestReconcileServices_LabelledService(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify the default round robin policy is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -103,7 +103,7 @@ func TestReconcileServices_LabelledServiceLbPolicy(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify the correct lb policy (ring hash) is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -140,7 +140,7 @@ func TestReconcileServices_LabelledServiceInvalidLbPolicy(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify the default round robin policy is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -177,7 +177,7 @@ func TestReconcileServices_XdsService(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify the default round robin policy is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -220,7 +220,7 @@ func TestReconcileServices_XdsServiceNotExistent(t *testing.T) {
 	}
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType))) // kube_on_demand
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +254,7 @@ func TestReconcileServices_XdsServiceDelete(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify we will have one Endpoint resource in the snapshot
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
@@ -271,7 +271,7 @@ func TestReconcileServices_XdsServiceDelete(t *testing.T) {
 	}
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType))) // kube_on_demand
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -304,7 +304,7 @@ func TestReconcileLocalEndpointSlice_SnapOnUpdate(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -394,7 +394,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses from both local(2) and remote(2). 4 lbEndpoint addresses in
 	// total. Also verify that all priorities are set to 0.
@@ -457,7 +457,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpoints(t *te
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// only local client addresses.
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
@@ -508,7 +508,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// only remote addresses (2).
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
@@ -560,7 +560,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *test
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses for local endpoints with priority 0 and for remote ones
 	// with priority 1.
@@ -622,7 +622,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses for remote endpoints with priority 0, regardless of
 	// PriorityStrategy set to local-first.

@@ -30,7 +30,7 @@ func TestSnapServices_EmptyServiceList(t *testing.T) {
 	// Verify that our snapshot will be empty
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType))) // kube_on_demand
 }
 
 func TestSnapServices_SingleService(t *testing.T) {
@@ -63,7 +63,7 @@ func TestSnapServices_SingleService(t *testing.T) {
 	// cluster
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 }
 
 func TestSnapServices_NoServicePorts(t *testing.T) {
@@ -87,7 +87,7 @@ func TestSnapServices_NoServicePorts(t *testing.T) {
 	// Verify that our snapshot will be empty
 	assert.Equal(t, 0, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 0, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 0, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType))) // kube_on_demand
 }
 
 func TestSnapServices_MultipleServicePorts(t *testing.T) {
@@ -124,7 +124,7 @@ func TestSnapServices_MultipleServicePorts(t *testing.T) {
 	// per port
 	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 2, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 3, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 3, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 }
 
 func TestSnapEndpoints_EmptyEndpointStore(t *testing.T) {
@@ -332,7 +332,7 @@ func TestSnapServices_NodeSnapshotResources(t *testing.T) {
 	}
 	assert.Equal(t, 2, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 2, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 3, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 3, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	// Client requesting more resources again should bring them back into the node snapshot
 	assert.Equal(t, true, snapshotter.needToUpdateSnapshot(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80"}))
 	if err := snapshotter.updateStreamNodeResources(nodeID, resource.ListenerType, streamID, []string{"fooA.bar:80", "fooB.bar:80"}); err != nil {
@@ -507,9 +507,9 @@ func TestSnapServices_SingleServiceWithAuthoritySet(t *testing.T) {
 	expectedRoutes := []string{
 		makeRouteConfigName("foo", "bar", int32(80)),
 		makeXdstpRouteConfigName("foo", "bar", "test-authority", int32(80)),
-		"all_kube_routes",
+		"kube_on_demand",
 	}
-	assert.Equal(t, 3, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
+	assert.Equal(t, 3, len(snap.GetResources(resource.RouteType))) // Includes kube_on_demand
 	for _, res := range snap.GetResources(resource.RouteType) {
 		route, err := UnmarshalResourceToRouteConfiguration(res)
 		if err != nil {

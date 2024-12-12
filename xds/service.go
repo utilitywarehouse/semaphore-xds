@@ -165,6 +165,34 @@ func makeAllKubeServicesRouteConfig(serviceStore XdsServiceStore) *routev3.Route
 	return nil
 }
 
+// makeOnDemandRouteConfig returns a config that will trigger on-demand follow
+// up queries for virtual hosts.
+func makeOnDemandRouteConfig() *routev3.RouteConfiguration {
+	return &routev3.RouteConfiguration{
+		Name: "kube_on_demand",
+		Vhds: &routev3.Vhds{
+			ConfigSource: &corev3.ConfigSource{
+				ResourceApiVersion: corev3.ApiVersion_V3, // Explicitly set to V3
+				ConfigSourceSpecifier: &corev3.ConfigSource_ApiConfigSource{
+					ApiConfigSource: &corev3.ApiConfigSource{
+						ApiType:             corev3.ApiConfigSource_DELTA_GRPC, // Use DELTA_GRPC as required
+						TransportApiVersion: corev3.ApiVersion_V3,              // Transport version
+						GrpcServices: []*corev3.GrpcService{
+							{
+								TargetSpecifier: &corev3.GrpcService_EnvoyGrpc_{
+									EnvoyGrpc: &corev3.GrpcService_EnvoyGrpc{
+										ClusterName: "xds_cluster",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func makeManager(routeConfig *routev3.RouteConfiguration) (*anypb.Any, error) {
 	router, _ := anypb.New(&routerv3.Router{})
 	return anypb.New(&managerv3.HttpConnectionManager{
@@ -259,8 +287,9 @@ func servicesToResources(serviceStore XdsServiceStore, authority string) ([]type
 			cls = append(cls, cluster)
 		}
 	}
-	if allKubeRoutes := makeAllKubeServicesRouteConfig(serviceStore); allKubeRoutes != nil {
-		rds = append(rds, allKubeRoutes)
-	}
+	//if allKubeRoutes := makeAllKubeServicesRouteConfig(serviceStore); allKubeRoutes != nil {
+	//	rds = append(rds, allKubeRoutes)
+	//}
+	rds = append(rds, makeOnDemandRouteConfig())
 	return cls, rds, lsnr, nil
 }
