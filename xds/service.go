@@ -227,7 +227,6 @@ func cluster(clusterName string, policy clusterv3.Cluster_LbPolicy) *clusterv3.C
 		Name:                 clusterName,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
 		LbPolicy:             policy,
-		Http2ProtocolOptions: &corev3.Http2ProtocolOptions{}, // Set so that Envoy will assume that the upstream supports HTTP/2
 		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
 			EdsConfig: &corev3.ConfigSource{
 				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
@@ -236,6 +235,33 @@ func cluster(clusterName string, policy clusterv3.Cluster_LbPolicy) *clusterv3.C
 			},
 		},
 	}
+}
+
+// patchClusterDeltaEDS patches a cluster's EDS config to configure the clients
+// to use Delta streams. It is meant to be used only for envoy clients where we
+// configure an xds server as "xds_cluster" via injected config.
+func patchClusterDeltaEDS(cluster *clusterv3.Cluster) *clusterv3.Cluster {
+	cluster.Http2ProtocolOptions = &corev3.Http2ProtocolOptions{}
+	cluster.EdsClusterConfig = &clusterv3.Cluster_EdsClusterConfig{
+		EdsConfig: &corev3.ConfigSource{
+			ConfigSourceSpecifier: &corev3.ConfigSource_ApiConfigSource{
+				ApiConfigSource: &corev3.ApiConfigSource{
+					ApiType:             corev3.ApiConfigSource_DELTA_GRPC,
+					TransportApiVersion: corev3.ApiVersion_V3,
+					GrpcServices: []*corev3.GrpcService{
+						{
+							TargetSpecifier: &corev3.GrpcService_EnvoyGrpc_{
+								EnvoyGrpc: &corev3.GrpcService_EnvoyGrpc{
+									ClusterName: "xds_cluster",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return cluster
 }
 
 // servicesToResources will return a set of listener, routeConfiguration and

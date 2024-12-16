@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -47,16 +46,17 @@ const (
 type Stream struct {
 	peerAddress      string
 	requestRateLimit *rate.Limiter
-	isDelta          bool
 }
 
 type Snapshotter struct {
 	authority              string // Authority name of the server for federated requests
 	servePort              uint
-	servicesCache          cache.SnapshotCache // default service snapshot cache for empty node ID (all watched resources snapshot)
-	serviceSnapVersion     int32               // Service snap version for empty node ID snapshot
-	endpointsCache         cache.SnapshotCache // default endpoints snapshot cache for empty node ID (all watched resources snapshot)
-	endpointsSnapVersion   int32               // Endpoints snap version for empty node ID snapshot
+	servicesCache          cache.SnapshotCache
+	serviceSnapVersion     int32 // Service snap version for empty node ID snapshot
+	endpointsCache         cache.SnapshotCache
+	endpointsSnapVersion   int32 // Endpoints snap version for empty node ID snapshot
+	deltaCDSCache          *cache.LinearCache
+	deltaEDSCache          *cache.LinearCache
 	muxCache               cache.MuxCache
 	requestRateLimit       *rate.Limiter // maximum number of requests allowed to server
 	streamRequestPerSecond float64       // maximum number of requests per stream per second
@@ -131,20 +131,57 @@ func mapTypeURL(typeURL string) string {
 	}
 }
 
+func mapDeltaTypeURL(typeURL string) string {
+	switch typeURL {
+	case resource.ClusterType:
+		return "deltaClusters"
+	case resource.EndpointType:
+		return "deltaEndpoints"
+	default:
+		return ""
+	}
+}
+
+func (s *Snapshotter) getCacheForType(typeURL string) cache.SnapshotCache {
+	switch typeURL {
+	case resource.ListenerType, resource.RouteType, resource.ClusterType:
+		return s.servicesCache
+	case resource.EndpointType:
+		return s.endpointsCache
+	default:
+		return nil
+	}
+}
+
+func (s *Snapshotter) getDeltaCacheForType(typeURL string) *cache.LinearCache {
+	switch typeURL {
+	case resource.EndpointType:
+		return s.deltaEDSCache
+	case resource.ClusterType:
+		return s.deltaCDSCache
+	default:
+		return nil
+	}
+}
+
 // NewSnapshotter needs a grpc server port and the allowed requests limits per server and stream per second
 func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimit float64, localhostEndpoints bool) *Snapshotter {
 	servicesCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger)
-	endpointsCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger) // This could be a linear cache? https://pkg.go.dev/github.com/envoyproxy/go-control-plane/pkg/cache/v3#LinearCache
+	endpointsCache := cache.NewSnapshotCache(false, cache.IDHash{}, log.EnvoyLogger)
+	deltaCDSCache := cache.NewLinearCache(resource.ClusterType, cache.WithLogger(log.EnvoyLogger))
+	deltaEDSCache := cache.NewLinearCache(resource.EndpointType, cache.WithLogger(log.EnvoyLogger))
 	muxCache := cache.MuxCache{
 		Classify: func(r *cache.Request) string {
 			return mapTypeURL(r.TypeUrl)
 		},
 		ClassifyDelta: func(r *cache.DeltaRequest) string {
-			return mapTypeURL(r.TypeUrl)
+			return mapDeltaTypeURL(r.TypeUrl)
 		},
 		Caches: map[string]cache.Cache{
-			"services":  servicesCache,
-			"endpoints": endpointsCache,
+			"services":       servicesCache,
+			"endpoints":      endpointsCache,
+			"deltaClusters":  deltaCDSCache,
+			"deltaEndpoints": deltaEDSCache,
 		},
 	}
 	return &Snapshotter{
@@ -152,6 +189,8 @@ func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimi
 		servePort:              port,
 		servicesCache:          servicesCache,
 		endpointsCache:         endpointsCache,
+		deltaCDSCache:          deltaCDSCache,
+		deltaEDSCache:          deltaEDSCache,
 		muxCache:               muxCache,
 		requestRateLimit:       rate.NewLimiter(rate.Limit(requestLimit), 1),
 		streamRequestPerSecond: streamRequestLimit,
@@ -213,6 +252,9 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set services snapshot %v", err)
 	}
+	// Sync linear caches
+	s.setDeltaCache(resource.ClusterType)
+
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
@@ -265,6 +307,9 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	if err != nil {
 		return fmt.Errorf("Failed to set endpoints snapshot %v", err)
 	}
+	// Sync linear caches
+	s.setDeltaCache(resource.EndpointType)
+
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
@@ -287,6 +332,32 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	return nil
 }
 
+// setDeltaCache gets resources of a type from the full Sotw snapshot and sets
+// them in the respective linear cache. This way we can make sure that linear
+// caches are synced with the existing resources, but we will be triggering
+// downstream notifications more often
+func (s *Snapshotter) setDeltaCache(typeUrl string) error {
+	// Load all the known resources from the full State of the world Snapshot
+	allResourcesSnap, err := s.getCacheForType(typeUrl).GetSnapshot(EmptyNodeID)
+	if err != nil {
+		return fmt.Errorf("Cannot sync linear cache for type: %s, failed to get sotw snap: %v", typeUrl, err)
+	}
+	allResourcesOfType := allResourcesSnap.GetResources(typeUrl)
+	setResources := make(map[string]types.Resource)
+	for name, res := range allResourcesOfType {
+		if typeUrl == resource.ClusterType {
+			cluster, err := UnmarshalResourceToCluster(res)
+			if err != nil {
+				return fmt.Errorf("Cannot unmarshal resource to cluster for patching: %v", err)
+			}
+			res = patchClusterDeltaEDS(cluster)
+		}
+		setResources[name] = res
+	}
+	s.getDeltaCacheForType(typeUrl).SetResources(setResources)
+	return nil
+}
+
 func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) error {
 	var peerAddr string
 	if peerInfo, ok := peer.FromContext(ctx); ok {
@@ -296,7 +367,6 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 	s.streams.Store(id, &Stream{
 		peerAddress:      peerAddr,
 		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
-		isDelta:          false,
 	})
 	metricOnStreamOpenInc()
 	return nil
@@ -365,9 +435,6 @@ func (s *Snapshotter) OnFetchRequest(ctx context.Context, req *discovery.Discove
 
 func (s *Snapshotter) OnDeltaStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnDeltaStreamClosed", "id", id, "node", node)
-	s.streams.Delete(id)
-	s.deleteNodeStream(node.GetId(), id)
-	metricOnStreamClosedInc()
 }
 
 func (s *Snapshotter) OnDeltaStreamOpen(ctx context.Context, id int64, typ string) error {
@@ -376,21 +443,12 @@ func (s *Snapshotter) OnDeltaStreamOpen(ctx context.Context, id int64, typ strin
 		peerAddr = peerInfo.Addr.String()
 	}
 	log.Logger.Info("OnDeltaStreamOpen", "peer address", peerAddr, "id", id, "type", typ)
-	s.streams.Store(id, &Stream{
-		peerAddress:      peerAddr,
-		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
-		isDelta:          true,
-	})
-	metricOnStreamOpenInc()
 	return nil
 }
 
 func (s *Snapshotter) OnStreamDeltaRequest(id int64, r *discovery.DeltaDiscoveryRequest) error {
-	st, _ := s.streams.Load(id)
-	stream := st.(*Stream)
 	log.Logger.Info("OnStreamDeltaRequest",
 		"id", id,
-		"peer", stream.peerAddress,
 		"received", r.GetTypeUrl(),
 		"node", r.GetNode().GetId(),
 		"locality", r.GetNode().GetLocality(),
@@ -398,13 +456,6 @@ func (s *Snapshotter) OnStreamDeltaRequest(id int64, r *discovery.DeltaDiscovery
 		"unsubscribes", strings.Join(r.GetResourceNamesUnsubscribe(), ", "),
 		"response_nonce", r.GetResponseNonce(),
 	)
-
-	s.addOrUpdateNode(r.GetNode().GetId(), stream.peerAddress, id)
-	if s.needToUpdateDeltaSubscriptions(r.GetNode().GetId(), r.GetTypeUrl(), id, r.GetResourceNamesSubscribe(), r.GetResourceNamesUnsubscribe()) {
-		if err := s.updateDeltaStreamNodeResources(r.GetNode().GetId(), r.GetTypeUrl(), id, r.GetResourceNamesSubscribe(), r.GetResourceNamesUnsubscribe()); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -576,70 +627,6 @@ func (s *Snapshotter) updateNodeStreamServiceResources(nodeID, typeURL string, s
 	return nil
 }
 
-// updateNodeDeltaStreamServiceResources updates the list of service resources requested in a node's stream context
-// by copying the most up to date version of them from the full snapshot (default snapshot)
-func (s *Snapshotter) updateNodeDeltaStreamServiceResources(nodeID, typeURL string, streamID int64, subscribe, unsubscribe []string) error {
-	n, ok := s.nodes.Load(nodeID)
-	if !ok {
-		return fmt.Errorf("Cannot update service snapshot resources, node: %s not found", nodeID)
-	}
-	node := n.(*Node)
-	nodeResources := deepCopyNodeResources(node.resources)
-	if _, ok := nodeResources[streamID]; !ok {
-		return fmt.Errorf("Cannot find service resources to update for node: %s in stream: %d context", nodeID, streamID)
-	}
-	// Calculate new resources to track based on subscribed and unsubscribed list
-	currTypedResources := nodeResources[streamID].servicesNames[typeURL]
-	for _, resourceName := range subscribe {
-		if !slices.Contains(currTypedResources, resourceName) {
-			currTypedResources = append(currTypedResources, resourceName)
-			// Snap on every change
-			newSnapResources, err := s.getResourcesFromCache(typeURL, currTypedResources)
-			if err != nil {
-				return fmt.Errorf("Cannot get resources from cache: %s", err)
-			}
-			nodeResources[streamID].services[typeURL] = newSnapResources
-			nodeResources[streamID].servicesNames[typeURL] = currTypedResources
-			updatedNode := &Node{
-				address:              node.address,
-				resources:            nodeResources,
-				serviceSnapVersion:   node.serviceSnapVersion,
-				endpointsSnapVersion: node.endpointsSnapVersion,
-			}
-			s.nodes.Store(nodeID, updatedNode)
-			return s.nodeServiceSnapshot(nodeID)
-		}
-
-	}
-
-	// Unsubscribe resources
-	newTypedResources := []string{}
-	for _, resourceName := range currTypedResources {
-		if !slices.Contains(unsubscribe, resourceName) {
-			newTypedResources = append(newTypedResources, resourceName)
-		}
-	}
-	if len(newTypedResources) < len(currTypedResources) {
-		newSnapResources, err := s.getResourcesFromCache(typeURL, newTypedResources)
-		if err != nil {
-			return fmt.Errorf("Cannot get resources from cache: %s", err)
-		}
-		nodeResources[streamID].services[typeURL] = newSnapResources
-		nodeResources[streamID].servicesNames[typeURL] = newTypedResources
-		updatedNode := &Node{
-			address:              node.address,
-			resources:            nodeResources,
-			serviceSnapVersion:   node.serviceSnapVersion,
-			endpointsSnapVersion: node.endpointsSnapVersion,
-		}
-		s.nodes.Store(nodeID, updatedNode)
-		if err := s.nodeServiceSnapshot(nodeID); err != nil {
-			return fmt.Errorf("Failed to snap resources to cache for node %s: %s", nodeID, err)
-		}
-	}
-	return nil
-}
-
 // updateNodeStreamEndpointsResources updates the list of endpoint resources requested in a node's stream context
 // by copying the most up to date version of them from the full snapshot (default snapshot)
 func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string, streamID int64, resources []string) error {
@@ -680,59 +667,6 @@ func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string,
 	return nil
 }
 
-// updateNodeDeltaStreamEndpointsResources updates the list of endpoint resources requested in a node's stream context
-// by copying the most up to date version of them from the full snapshot (default snapshot)
-func (s *Snapshotter) updateNodeDeltaStreamEndpointsResources(nodeID, typeURL string, streamID int64, subscribe, unsubscribe []string) error {
-	n, ok := s.nodes.Load(nodeID)
-	if !ok {
-		return fmt.Errorf("Cannot update service snapshot resources, node: %s not found", nodeID)
-	}
-	node := n.(*Node)
-	nodeResources := deepCopyNodeResources(node.resources)
-	if _, ok := nodeResources[streamID]; !ok {
-		return fmt.Errorf("Cannot find service resources to update for node: %s in stream: %d context", nodeID, streamID)
-	}
-	// Calculate new resources to track based on subscribed and unsubscribed list
-	currTypedResources := nodeResources[streamID].servicesNames[typeURL]
-	newTypedResources := []string{}
-	for _, resourceName := range currTypedResources {
-		if !slices.Contains(unsubscribe, resourceName) {
-			newTypedResources = append(newTypedResources, resourceName)
-		}
-	}
-	for _, resourceName := range subscribe {
-		if !slices.Contains(newTypedResources, resourceName) {
-			newTypedResources = append(newTypedResources, resourceName)
-		}
-	}
-
-	var newSnapResources []types.Resource
-	var err error
-	if s.localhostEndpoints {
-		newSnapResources, err = s.makeDummyResources(typeURL, newTypedResources)
-		if err != nil {
-			return fmt.Errorf("Cannot make dummy resources for localhost mode: %s", err)
-		}
-		log.Logger.Debug("Created dummy resources", "type", typeURL, "resources", newSnapResources, "count", len(newSnapResources))
-	} else {
-		newSnapResources, err = s.getResourcesFromCache(typeURL, newTypedResources)
-		if err != nil {
-			return fmt.Errorf("Cannot get resources from cache: %s", err)
-		}
-	}
-
-	nodeResources[streamID].endpoints[typeURL] = newSnapResources
-	nodeResources[streamID].endpointsNames[typeURL] = newTypedResources
-	updatedNode := &Node{
-		address:              node.address,
-		resources:            nodeResources,
-		serviceSnapVersion:   node.serviceSnapVersion,
-		endpointsSnapVersion: node.endpointsSnapVersion,
-	}
-	s.nodes.Store(nodeID, updatedNode)
-	return nil
-}
-
 // nodeServiceSnapshot throws the current service NodeResources content into a new snapshot
 func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 	ctx := context.Background()
@@ -746,9 +680,6 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.serviceSnapVersion), snapServices)
 	if err != nil {
 		return err
-	}
-	for t, r := range snapServices {
-		log.Logger.Debug("Updating node snapshot", "node", nodeID, "typeURL", t, "resources", r)
 	}
 	return s.servicesCache.SetSnapshot(ctx, nodeID, snapshot)
 }
@@ -767,9 +698,6 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 	if err != nil {
 		return err
 	}
-	for t, r := range snapEndpoints {
-		log.Logger.Debug("Updating node snapshot", "node", nodeID, "typeURL", t, "resources", r)
-	}
 	return s.endpointsCache.SetSnapshot(ctx, nodeID, snapshot)
 }
 
@@ -784,24 +712,6 @@ func (s *Snapshotter) updateStreamNodeResources(nodeID, typeURL string, streamID
 	}
 	if mapTypeURL(typeURL) == "endpoints" {
 		if err := s.updateNodeStreamEndpointsResources(nodeID, typeURL, streamID, resources); err != nil {
-			return err
-		}
-		return s.nodeEndpointsSnapshot(nodeID)
-	}
-	return nil
-}
-
-// updateDeltaStreamNodeResources will update the resources tracked for the node inside a streams context and
-// trigger a new snapshot
-func (s *Snapshotter) updateDeltaStreamNodeResources(nodeID, typeURL string, streamID int64, subscribe, unsubscribe []string) error {
-	if mapTypeURL(typeURL) == "services" {
-		if err := s.updateNodeDeltaStreamServiceResources(nodeID, typeURL, streamID, subscribe, unsubscribe); err != nil {
-			return err
-		}
-		return s.nodeServiceSnapshot(nodeID)
-	}
-	if mapTypeURL(typeURL) == "endpoints" {
-		if err := s.updateNodeDeltaStreamEndpointsResources(nodeID, typeURL, streamID, subscribe, unsubscribe); err != nil {
 			return err
 		}
 		return s.nodeEndpointsSnapshot(nodeID)
@@ -827,33 +737,6 @@ func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int6
 	}
 	if mapTypeURL(typeURL) == "endpoints" {
 		return !resourcesMatch(sNodeResources.endpointsNames[typeURL], resources)
-	}
-	return false
-}
-
-// needToUpdateDeltaSubscriptions returns true if a delta request changes the
-// list of subscribed resources
-func (s *Snapshotter) needToUpdateDeltaSubscriptions(nodeID, typeURL string, streamID int64, subscribe, unsubscribe []string) bool {
-	n, ok := s.nodes.Load(nodeID)
-	if !ok {
-		return false
-	}
-	node := n.(*Node)
-	sNodeResources, ok := node.resources[streamID]
-	if !ok {
-		log.Logger.Warn("Cannot check if delta subscriptions changed, stream not found", "id", streamID)
-		return false
-	}
-	resources := sNodeResources.servicesNames[typeURL]
-	for _, r := range subscribe {
-		if !slices.Contains(resources, r) {
-			return true
-		}
-	}
-	for _, r := range unsubscribe {
-		if slices.Contains(resources, r) {
-			return true
-		}
 	}
 	return false
 }
