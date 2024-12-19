@@ -93,6 +93,10 @@ func makeRouteConfig(name, namespace, authority string, port int32, retry *route
 		virtualHostName = makeXdstpVirtualHostName(name, namespace, authority, port)
 		domains = append(domains, virtualHostName)
 	}
+	return routeConfig(routeName, clusterName, virtualHostName, domains, retry, hashPolicies)
+}
+
+func routeConfig(routeName, clusterName, virtualHostName string, domains []string, retry *routev3.RetryPolicy, hashPolicies []*routev3.RouteAction_HashPolicy) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: routeName,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -120,6 +124,47 @@ func makeRouteConfig(name, namespace, authority string, port int32, retry *route
 	}
 }
 
+// makeAllKubeServicesRouteConfig will return all the available routes in a
+// Kubernetes cluster. It is meant to be combined with envoy clients that will
+// also configure on-demand CDS and EDS for lazy resources discovery.
+func makeAllKubeServicesRouteConfig(serviceStore XdsServiceStore) *routev3.RouteConfiguration {
+	vh := []*routev3.VirtualHost{}
+	for _, s := range serviceStore.All() {
+		for _, port := range s.Service.Spec.Ports {
+			clusterName := makeClusterName(s.Service.Name, s.Service.Namespace, port.Port)
+			virtualHostName := makeVirtualHostName(s.Service.Name, s.Service.Namespace, port.Port)
+			domains := []string{makeGlobalServiceDomain(s.Service.Name, s.Service.Namespace, port.Port)}
+			vh = append(vh, &routev3.VirtualHost{
+				Name:    virtualHostName,
+				Domains: domains,
+				Routes: []*routev3.Route{{
+					Match: &routev3.RouteMatch{
+						PathSpecifier: &routev3.RouteMatch_Prefix{
+							Prefix: "",
+						},
+					},
+					Action: &routev3.Route_Route{
+						Route: &routev3.RouteAction{
+							ClusterSpecifier: &routev3.RouteAction_Cluster{
+								Cluster: clusterName,
+							},
+							HashPolicy: s.RingHashPolicies,
+						},
+					},
+				}},
+				RetryPolicy: s.Retry,
+			})
+		}
+	}
+	if len(vh) > 0 {
+		return &routev3.RouteConfiguration{
+			Name:         "all_kube_routes",
+			VirtualHosts: vh,
+		}
+	}
+	return nil
+}
+
 func makeManager(routeConfig *routev3.RouteConfiguration) (*anypb.Any, error) {
 	router, _ := anypb.New(&routerv3.Router{})
 	return anypb.New(&managerv3.HttpConnectionManager{
@@ -142,6 +187,10 @@ func makeListener(name, namespace, authority string, port int32, manager *anypb.
 	if authority != "" {
 		listenerName = makeXdstpListenerName(name, namespace, authority, port)
 	}
+	return listener(listenerName, manager)
+}
+
+func listener(listenerName string, manager *anypb.Any) *listenerv3.Listener {
 	return &listenerv3.Listener{
 		Name: listenerName,
 		ApiListener: &listenerv3.ApiListener{
@@ -155,19 +204,8 @@ func makeCluster(name, namespace, authority string, port int32, policy clusterv3
 	if authority != "" {
 		clusterName = makeXdstpClusterName(name, namespace, authority, port)
 	}
-	cluster := &clusterv3.Cluster{
-		Name:                 clusterName,
-		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
-		LbPolicy:             policy,
-		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
-			EdsConfig: &corev3.ConfigSource{
-				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
-					Ads: &corev3.AggregatedConfigSource{},
-				},
-			},
-		},
-	}
 
+	cluster := cluster(clusterName, policy)
 	if authority != "" {
 		// This will be the name of the subsequently requested ClusterLoadAssignment. We need to set this
 		// to the cluster name to hit resources in the cache and reply to EDS requests
@@ -181,6 +219,48 @@ func makeCluster(name, namespace, authority string, port int32, policy clusterv3
 		}
 	}
 
+	return cluster
+}
+
+func cluster(clusterName string, policy clusterv3.Cluster_LbPolicy) *clusterv3.Cluster {
+	return &clusterv3.Cluster{
+		Name:                 clusterName,
+		ClusterDiscoveryType: &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS},
+		LbPolicy:             policy,
+		EdsClusterConfig: &clusterv3.Cluster_EdsClusterConfig{
+			EdsConfig: &corev3.ConfigSource{
+				ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
+					Ads: &corev3.AggregatedConfigSource{},
+				},
+			},
+		},
+	}
+}
+
+// patchClusterDeltaEDS patches a cluster's EDS config to configure the clients
+// to use Delta streams. It is meant to be used only for envoy clients where we
+// configure an xds server as "xds_cluster" via injected config.
+func patchClusterDeltaEDS(cluster *clusterv3.Cluster) *clusterv3.Cluster {
+	cluster.Http2ProtocolOptions = &corev3.Http2ProtocolOptions{}
+	cluster.EdsClusterConfig = &clusterv3.Cluster_EdsClusterConfig{
+		EdsConfig: &corev3.ConfigSource{
+			ConfigSourceSpecifier: &corev3.ConfigSource_ApiConfigSource{
+				ApiConfigSource: &corev3.ApiConfigSource{
+					ApiType:             corev3.ApiConfigSource_DELTA_GRPC,
+					TransportApiVersion: corev3.ApiVersion_V3,
+					GrpcServices: []*corev3.GrpcService{
+						{
+							TargetSpecifier: &corev3.GrpcService_EnvoyGrpc_{
+								EnvoyGrpc: &corev3.GrpcService_EnvoyGrpc{
+									ClusterName: "xds_cluster",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 	return cluster
 }
 
@@ -204,6 +284,9 @@ func servicesToResources(serviceStore XdsServiceStore, authority string) ([]type
 			cluster := makeCluster(s.Service.Name, s.Service.Namespace, authority, port.Port, s.Policy, s.RingHash)
 			cls = append(cls, cluster)
 		}
+	}
+	if allKubeRoutes := makeAllKubeServicesRouteConfig(serviceStore); allKubeRoutes != nil {
+		rds = append(rds, allKubeRoutes)
 	}
 	return cls, rds, lsnr, nil
 }

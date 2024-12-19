@@ -1,0 +1,25 @@
+  - name: listener_main
+    address:
+      socket_address: { address: 127.0.0.1, port_value: {{ .Port }} }
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          route_config:
+            virtual_hosts:
+            {{- range .Domains }}
+            - name: {{ .Name }}
+              domains: ["{{ .Domain }}"]
+              routes:
+              - match:
+                  prefix: ""
+                route:
+                  cluster: {{ .Cluster }}
+            {{- end }}
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              dynamic_stats: true

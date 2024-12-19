@@ -286,3 +286,13 @@ func resourcesMatch(a, b []string) bool {
 	}
 	return true
 }
+
+func subscriptionKeys(s map[string]struct{}) []string {
+	keys := make([]string, len(s))
+	i := 0
+	for k := range s {
+		keys[i] = k
+		i++
+	}
+	return keys
+}

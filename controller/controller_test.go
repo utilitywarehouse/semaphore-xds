@@ -39,7 +39,7 @@ func TestReconcileServices_LabelledService(t *testing.T) {
 		"./test-resources/labelled_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -60,7 +60,7 @@ func TestReconcileServices_LabelledService(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify the default round robin policy is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -82,7 +82,7 @@ func TestReconcileServices_LabelledServiceLbPolicy(t *testing.T) {
 		"./test-resources/labelled_service_ring_hash_balancer.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -103,7 +103,7 @@ func TestReconcileServices_LabelledServiceLbPolicy(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify the correct lb policy (ring hash) is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -119,7 +119,7 @@ func TestReconcileServices_LabelledServiceInvalidLbPolicy(t *testing.T) {
 		"./test-resources/labelled_service_invalid_balancer.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -140,7 +140,7 @@ func TestReconcileServices_LabelledServiceInvalidLbPolicy(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify the default round robin policy is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -156,7 +156,7 @@ func TestReconcileServices_XdsService(t *testing.T) {
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -177,7 +177,7 @@ func TestReconcileServices_XdsService(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify the default round robin policy is set on the clusters
 	for _, cl := range snap.GetResources(resource.ClusterType) {
 		cluster, err := xds.UnmarshalResourceToCluster(cl)
@@ -199,7 +199,7 @@ func TestReconcileServices_XdsServiceNotExistent(t *testing.T) {
 		"./test-resources/xds_service_not_existent.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -233,7 +233,7 @@ func TestReconcileServices_XdsServiceDelete(t *testing.T) {
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -254,7 +254,7 @@ func TestReconcileServices_XdsServiceDelete(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify we will have one Endpoint resource in the snapshot
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
@@ -284,7 +284,7 @@ func TestReconcileLocalEndpointSlice_SnapOnUpdate(t *testing.T) {
 		"./test-resources/xds_service.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -304,7 +304,7 @@ func TestReconcileLocalEndpointSlice_SnapOnUpdate(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
 	if err != nil {
 		t.Fatal(err)
@@ -318,7 +318,7 @@ func TestReconcileLocalEndpointSlice_NotFound(t *testing.T) {
 		"./test-resources/endpointslice.yaml",
 	)
 	client.EndpointSliceApiError(kubeerror.NewNotFound(schema.GroupResource{Resource: "endpointslice"}, "foo"))
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -345,7 +345,7 @@ func TestReconcileLocalEndpointSlice_NonXdsService(t *testing.T) {
 	client := kube.NewClientMock(
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
@@ -373,7 +373,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -394,7 +394,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses from both local(2) and remote(2). 4 lbEndpoint addresses in
 	// total. Also verify that all priorities are set to 0.
@@ -436,7 +436,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpoints(t *te
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -457,7 +457,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpoints_NoRemoteEndpoints(t *te
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// only local client addresses.
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
@@ -487,7 +487,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -508,7 +508,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpoints(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// only remote addresses (2).
 	snap, err = snapshotter.EndpointsSnapshot(testNodeID)
@@ -539,7 +539,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *test
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -560,7 +560,7 @@ func TestReconcileServices_XdsServiceWithRemoteEndpointsAndLocalPriority(t *test
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses for local endpoints with priority 0 and for remote ones
 	// with priority 1.
@@ -601,7 +601,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -622,7 +622,7 @@ func TestReconcileServices_XdsServiceWithOnlyRemoteEndpointsAndLocalPriority(t *
 	}
 	assert.Equal(t, 1, len(snap.GetResources(resource.ListenerType)))
 	assert.Equal(t, 1, len(snap.GetResources(resource.ClusterType)))
-	assert.Equal(t, 1, len(snap.GetResources(resource.RouteType)))
+	assert.Equal(t, 2, len(snap.GetResources(resource.RouteType))) // Includes all_kube_routes
 	// Verify we will have 1 Endpoint resource in the snapshot containing
 	// addresses for remote endpoints with priority 0, regardless of
 	// PriorityStrategy set to local-first.
@@ -656,7 +656,7 @@ func TestReconcileLocalEndpointSlices_XdsServiceWithEmptyLocalEndpoints(t *testi
 	remoteClient := kube.NewClientMock(
 		"./test-resources/endpointslice-remote.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		localClient,
 		[]kube.Client{remoteClient},
@@ -700,7 +700,7 @@ func TestReconcileServices_XdsServiceWithRingHash(t *testing.T) {
 		"./test-resources/xds_service_ring_hash_balancing.yaml",
 		"./test-resources/endpointslice.yaml",
 	)
-	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0))
+	snapshotter := xds.NewSnapshotter("", testSnapshotterListenPort, float64(0), float64(0), false)
 	controller := NewController(
 		client,
 		[]kube.Client{},
