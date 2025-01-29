@@ -230,3 +230,28 @@ func endpointSlicesToClusterLoadAssignments(endpointStore XdsEndpointStore, auth
 	}
 	return eds, nil
 }
+
+// endpointSlicesToClusterLoadAssignmentsWithNames returns a map of EDS type
+// resources as expected to snapshot a Linear cache
+func endpointSlicesToClusterLoadAssignmentsWithNames(endpointStore XdsEndpointStore, authority string) map[string]types.Resource {
+	eds := make(map[string]types.Resource)
+	clusters := createClustersFromEndpointStore(endpointStore, authority)
+	for name, cluster := range clusters {
+		var localityEps []*endpointv3.LocalityLbEndpoints
+		for _, endpoint := range cluster.endpoints {
+			var lbes []*endpointv3.LbEndpoint
+			for _, a := range endpoint.addresses {
+				lbes = append(lbes, lbEndpoint(a, endpoint.port, endpoint.healthy))
+			}
+			localityEps = append(localityEps, localityEndpoints(lbes, endpoint.zone, endpoint.subzone, endpoint.priority))
+		}
+		eds[name] = clusterLoadAssignment(name, localityEps)
+	}
+	return eds
+}
+
+func localhostClusterLoadAssignment(clusterName string) *endpointv3.ClusterLoadAssignment {
+	endpoints := []*endpointv3.LbEndpoint{lbEndpoint("127.0.0.1", int32(18001), true)}
+	localityEndpoint := []*endpointv3.LocalityLbEndpoints{localityEndpoints(endpoints, "localhost", "localhost", uint32(0))}
+	return clusterLoadAssignment(clusterName, localityEndpoint)
+}

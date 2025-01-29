@@ -11,3 +11,17 @@ spec:
   ingress:
     - ports:
         - port: 18000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-to-semaphore-xds-localhost
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: semaphore-xds-localhost
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 18000
