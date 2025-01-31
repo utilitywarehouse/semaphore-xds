@@ -149,7 +149,7 @@ spec:
                                     address: 127.0.0.1
                                     port_value: 9901
                     ' > /etc/envoy/config.yaml
-                    envoy -c /etc/envoy/config.yaml --service-node {{request.object.metadata.namespace}}/${POD_NAME} --service-cluster {{request.object.metadata.namespace}}/${POD_NAME} -l debug
+                    envoy -c /etc/envoy/config.yaml --service-node {{request.object.metadata.namespace}}/${POD_NAME} --service-cluster {{request.object.metadata.namespace}}/${POD_NAME}
                 env:
                   - name: POD_NAME
                     valueFrom:
