@@ -22,17 +22,20 @@ spec:
                 - Pod
               operations:
                 - CREATE
-              selector:
-                matchLabels:
-                  xds.semaphore.uw.systems/client: "true"
+      exclude:
+        any:
           - resources:
               kinds:
                 - Pod
-              operations:
-                - CREATE
               selector:
                 matchLabels:
-                  xds.semaphore.uw.systems/client: "native"
+                  xds.semaphore.uw.systems/client: "exclude"
+          - resources:
+              kinds:
+                - Pod
+              selector:
+                matchLabels:
+                  xds.semaphore.uw.systems/client: "envoy-sidecar"
       mutate:
         patchStrategicMerge:
           spec:
