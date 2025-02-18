@@ -48,40 +48,7 @@ spec:
                         fieldPath: metadata.name
                   - name: GRPC_XDS_BOOTSTRAP_CONFIG
                     value: >-
-                      {
-                        "xds_servers": [{
-                          "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
-                          "channel_creds": [{"type": "insecure"}],
-                          "server_features": ["xds_v3"]}
-                        ],
-                        "node":{
-                          "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
-                          "locality":{}
-                        },
-                        "authorities": {
-                          "aws": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "gcp": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "merit": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          }
-                        }
-                      }
+                      {"xds_servers": [{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.local:18000","channel_creds":[{"type": "insecure"}],"server_features":["xds_v3"]}],"node":{"id":"{{request.object.metadata.namespace}}/\$(POD_NAME)","locality":{}},"authorities":{"aws":{"xds_servers":[{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.aws:18000","channel_creds": [{"type": "insecure"}],"server_features": ["xds_v3"]}]},"gcp":{"xds_servers":[{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.gcp:18000","channel_creds":[{"type": "insecure"}],"server_features":["xds_v3"]}]},"merit":{"xds_servers":[{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.merit:18000","channel_creds":[{"type": "insecure"}],"server_features":["xds_v3"]}]}}}
             containers:
               - (name): "*"
                 env:
@@ -91,37 +58,4 @@ spec:
                         fieldPath: metadata.name
                   - name: GRPC_XDS_BOOTSTRAP_CONFIG
                     value: >-
-                      {
-                        "xds_servers": [{
-                          "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
-                          "channel_creds": [{"type": "insecure"}],
-                          "server_features": ["xds_v3"]}
-                        ],
-                        "node":{
-                          "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
-                          "locality":{}
-                        },
-                        "authorities": {
-                          "aws": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "gcp": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "merit": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          }
-                        }
-                      }
+                      {"xds_servers": [{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.local:18000","channel_creds":[{"type": "insecure"}],"server_features":["xds_v3"]}],"node":{"id":"{{request.object.metadata.namespace}}/\$(POD_NAME)","locality":{}},"authorities":{"aws":{"xds_servers":[{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.aws:18000","channel_creds": [{"type": "insecure"}],"server_features": ["xds_v3"]}]},"gcp":{"xds_servers":[{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.gcp:18000","channel_creds":[{"type": "insecure"}],"server_features":["xds_v3"]}]},"merit":{"xds_servers":[{"server_uri":"semaphore-xds.sys-semaphore.svc.cluster.merit:18000","channel_creds":[{"type": "insecure"}],"server_features":["xds_v3"]}]}}}
