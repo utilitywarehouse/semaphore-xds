@@ -22,6 +22,25 @@ spec:
                 - Pod
               operations:
                 - CREATE
+              namespaceSelector:
+                matchLabels:
+                  xds.semaphore.uw.systems/namespace: "bootstrap-config"
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+              selector:
+                matchLabels:
+                  xds.semaphore.uw.systems/client: "native"
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+              selector:
+                matchLabels:
+                  xds.semaphore.uw.systems/client: "true" # legacy value support
       exclude:
         any:
           - resources:
