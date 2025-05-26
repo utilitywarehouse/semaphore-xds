@@ -22,6 +22,28 @@ spec:
                 - Pod
               operations:
                 - CREATE
+              selector:
+                matchLabels:
+                  xds.semaphore.uw.systems/client: "true"
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+              selector:
+                matchLabels:
+                  xds.semaphore.uw.systems/client: "native"
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+              namespaceSelector:
+                matchExpressions:
+                  - key: xds.semaphore.uw.systems/mutate
+                    operator: In
+                    values:
+                      - bootstrap-client-config
       exclude:
         any:
           - resources:
