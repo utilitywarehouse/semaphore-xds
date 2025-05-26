@@ -22,6 +22,12 @@ spec:
                 - Pod
               operations:
                 - CREATE
+              namespaceSelector:
+                matchExpressions:
+                  - key: xds.semaphore.uw.systems/mutate
+                    operator: In
+                    values:
+                      - bootstrap-client-config
       exclude:
         any:
           - resources:
