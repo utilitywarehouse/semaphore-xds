@@ -8,7 +8,7 @@ require (
 	github.com/golang/protobuf v1.5.4
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/mdlayher/promtest v0.0.0-20210824143500-998bde29eaa8
-	github.com/prometheus/client_golang v1.21.1
+	github.com/prometheus/client_golang v1.22.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/time v0.11.0
 	google.golang.org/grpc v1.71.0
@@ -40,7 +40,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
