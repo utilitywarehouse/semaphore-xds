@@ -62,6 +62,7 @@ type Snapshotter struct {
 	streamRequestPerSecond float64       // maximum number of requests per stream per second
 	streams                sync.Map      // map of open streams
 	nodes                  sync.Map      // maps all clients node ids to requested resources that will be snapshotted and served
+	nodeLocks              sync.Map      // map[nodeID]*sync.Mutex locks to make update functions concurrent safe
 	snapNodesMu            sync.Mutex    // Simple lock to avoid deleting a node while snapshotting
 	localhostEndpoints     bool
 }
@@ -472,6 +473,9 @@ func (s *Snapshotter) OnFetchResponse(req *discovery.DiscoveryRequest, resp *dis
 // addOrUpdateNode will add a new node if not present, or add a new stream
 // resources placeholder if needed.
 func (s *Snapshotter) addOrUpdateNode(nodeID, address string, streamID int64) {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		// Node not found, add a new one without any resources
@@ -545,6 +549,7 @@ func (s *Snapshotter) deleteNode(nodeID string) {
 	s.snapNodesMu.Lock()
 	defer s.snapNodesMu.Unlock()
 	s.nodes.Delete(nodeID)
+	s.deleteNodeLock(nodeID)
 	s.servicesCache.ClearSnapshot(nodeID)
 	s.endpointsCache.ClearSnapshot(nodeID)
 }
@@ -752,6 +757,16 @@ func (s *Snapshotter) ListenAndServe() {
 	grpcServer := grpc.NewServer(grpcOptions...)
 	registerServices(grpcServer, xdsServer)
 	runGrpcServer(ctx, grpcServer, s.servePort)
+}
+
+// getLock will create, store and return a lock per node
+func (s *Snapshotter) getNodeLock(nodeID string) *sync.Mutex {
+	mu, _ := s.nodeLocks.LoadOrStore(nodeID, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+func (s *Snapshotter) deleteNodeLock(nodeID string) {
+	s.nodeLocks.Delete(nodeID)
 }
 
 // registerServices registers xds services served by our grpc server
