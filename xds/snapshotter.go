@@ -71,7 +71,6 @@ type Snapshotter struct {
 // each one requesting resources that should be part of the cache snapshot for
 // the specific node.
 type Node struct {
-	mu                   sync.RWMutex
 	address              string
 	resources            map[int64]*NodeSnapshotResources // map of node resources per open stream id
 	serviceSnapVersion   int32                            // Service snap version for node specific cache snapshot
@@ -228,8 +227,6 @@ func (s *Snapshotter) NodesMap() map[string]string {
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
-		node.mu.RLock()
-		defer node.mu.RUnlock()
 		r[nodeID] = node.address
 		return true
 	})
@@ -279,8 +276,6 @@ func (s *Snapshotter) SnapServices(serviceStore XdsServiceStore) error {
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
-		node.mu.RLock()
-		defer node.mu.RUnlock()
 		for sID, res := range node.resources {
 			for typeURL, resources := range res.servicesNames {
 				if err := s.updateNodeStreamServiceResources(nodeID, typeURL, sID, resources); err != nil {
@@ -337,8 +332,6 @@ func (s *Snapshotter) SnapEndpoints(endpointStore XdsEndpointStore) error {
 	s.nodes.Range(func(nID, n interface{}) bool {
 		nodeID := nID.(string)
 		node := n.(*Node)
-		node.mu.RLock()
-		defer node.mu.RUnlock()
 		for sID, res := range node.resources {
 			for typeURL, resources := range res.endpointsNames {
 				if err := s.updateNodeStreamEndpointsResources(nodeID, typeURL, sID, resources); err != nil {
@@ -480,6 +473,9 @@ func (s *Snapshotter) OnFetchResponse(req *discovery.DiscoveryRequest, resp *dis
 // addOrUpdateNode will add a new node if not present, or add a new stream
 // resources placeholder if needed.
 func (s *Snapshotter) addOrUpdateNode(nodeID, address string, streamID int64) {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		// Node not found, add a new one without any resources
@@ -493,8 +489,6 @@ func (s *Snapshotter) addOrUpdateNode(nodeID, address string, streamID int64) {
 		return
 	}
 	node := n.(*Node)
-	node.mu.Lock()
-	defer node.mu.Unlock()
 	nodeResources := deepCopyNodeResources(node.resources)
 	for sID, _ := range nodeResources {
 		if sID == streamID {
@@ -503,12 +497,21 @@ func (s *Snapshotter) addOrUpdateNode(nodeID, address string, streamID int64) {
 	}
 	log.Logger.Info("New stream for node", "node", nodeID, "streamID", streamID)
 	nodeResources[streamID] = makeEmptyNodeResources()
-	node.resources = nodeResources
+	updatedNode := &Node{
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
+	}
+	s.nodes.Store(nodeID, updatedNode)
 }
 
 // deleteNodeStream removes a stream from a node's resources and if the list of streams is
 // empty deletes the node
 func (s *Snapshotter) deleteNodeStream(nodeID string, streamID int64) {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	if nodeID == EmptyNodeID {
 		return
 	}
@@ -518,8 +521,6 @@ func (s *Snapshotter) deleteNodeStream(nodeID string, streamID int64) {
 		return
 	}
 	node := n.(*Node)
-	node.mu.Lock()
-	defer node.mu.Unlock()
 	nodeResources := deepCopyNodeResources(node.resources)
 	delete(nodeResources, streamID)
 	// if no more streams are open, delete the node
@@ -527,7 +528,14 @@ func (s *Snapshotter) deleteNodeStream(nodeID string, streamID int64) {
 		s.deleteNode(nodeID)
 		return
 	}
-	node.resources = nodeResources
+	// else just update the node
+	updatedNode := &Node{
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
+	}
+	s.nodes.Store(nodeID, updatedNode)
 	if err := s.nodeServiceSnapshot(nodeID); err != nil {
 		log.Logger.Warn("Failed to update service snapshot on stream closure", "node", nodeID, "error", err)
 	}
@@ -544,6 +552,7 @@ func (s *Snapshotter) deleteNode(nodeID string) {
 	s.snapNodesMu.Lock()
 	defer s.snapNodesMu.Unlock()
 	s.nodes.Delete(nodeID)
+	s.deleteNodeLock(nodeID)
 	s.servicesCache.ClearSnapshot(nodeID)
 	s.endpointsCache.ClearSnapshot(nodeID)
 }
@@ -586,13 +595,14 @@ func (s *Snapshotter) getResourcesFromCache(typeURL string, resources []string) 
 // updateNodeStreamServiceResources updates the list of service resources requested in a node's stream context
 // by copying the most up to date version of them from the full snapshot (default snapshot)
 func (s *Snapshotter) updateNodeStreamServiceResources(nodeID, typeURL string, streamID int64, resources []string) error {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		return fmt.Errorf("Cannot update service snapshot resources, node: %s not found", nodeID)
 	}
 	node := n.(*Node)
-	node.mu.Lock()
-	defer node.mu.Unlock()
 	nodeResources := deepCopyNodeResources(node.resources)
 	if _, ok := nodeResources[streamID]; !ok {
 		return fmt.Errorf("Cannot find service resources to update for node: %s in stream: %d context", nodeID, streamID)
@@ -615,20 +625,28 @@ func (s *Snapshotter) updateNodeStreamServiceResources(nodeID, typeURL string, s
 
 	nodeResources[streamID].services[typeURL] = newSnapResources
 	nodeResources[streamID].servicesNames[typeURL] = resources
-	node.resources = nodeResources
+	updatedNode := &Node{
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
+	}
+	log.Logger.Debug("Updating node resources", "node", nodeID, "type", typeURL, "resources", updatedNode.resources[streamID].services[typeURL])
+	s.nodes.Store(nodeID, updatedNode)
 	return nil
 }
 
 // updateNodeStreamEndpointsResources updates the list of endpoint resources requested in a node's stream context
 // by copying the most up to date version of them from the full snapshot (default snapshot)
 func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string, streamID int64, resources []string) error {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		return fmt.Errorf("Cannot update endpoint snapshot resources, node: %s not found", nodeID)
 	}
 	node := n.(*Node)
-	node.mu.Lock()
-	defer node.mu.Unlock()
 	nodeResources := deepCopyNodeResources(node.resources)
 	if _, ok := nodeResources[streamID]; !ok {
 		return fmt.Errorf("Cannot find endpoint resources to update for node: %s in stream: %d context", nodeID, streamID)
@@ -651,7 +669,13 @@ func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string,
 
 	nodeResources[streamID].endpoints[typeURL] = newSnapResources
 	nodeResources[streamID].endpointsNames[typeURL] = resources
-	node.resources = nodeResources
+	updatedNode := &Node{
+		address:              node.address,
+		resources:            nodeResources,
+		serviceSnapVersion:   node.serviceSnapVersion,
+		endpointsSnapVersion: node.endpointsSnapVersion,
+	}
+	s.nodes.Store(nodeID, updatedNode)
 	return nil
 }
 
@@ -663,8 +687,6 @@ func (s *Snapshotter) nodeServiceSnapshot(nodeID string) error {
 		return fmt.Errorf("Cannot create a new snapshot, node: %s not found", nodeID)
 	}
 	node := n.(*Node)
-	node.mu.RLock()
-	defer node.mu.RUnlock()
 	atomic.AddInt32(&node.serviceSnapVersion, 1)
 	snapServices := aggregateNodeResources("services", node.resources)
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.serviceSnapVersion), snapServices)
@@ -682,8 +704,6 @@ func (s *Snapshotter) nodeEndpointsSnapshot(nodeID string) error {
 		return fmt.Errorf("Cannot create a new snapshot, node: %s not found", nodeID)
 	}
 	node := n.(*Node)
-	node.mu.RLock()
-	defer node.mu.RUnlock()
 	atomic.AddInt32(&node.endpointsSnapVersion, 1)
 	snapEndpoints := aggregateNodeResources("endpoints", node.resources)
 	snapshot, err := cache.NewSnapshot(fmt.Sprint(node.endpointsSnapVersion), snapEndpoints)
@@ -719,8 +739,6 @@ func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int6
 		return false
 	}
 	node := n.(*Node)
-	node.mu.RLock()
-	defer node.mu.RUnlock()
 	sNodeResources, ok := node.resources[streamID]
 	if !ok {
 		log.Logger.Warn("Cannot check if snapshot needs updating, stream not found", "id", streamID)
@@ -748,6 +766,16 @@ func (s *Snapshotter) ListenAndServe() {
 	grpcServer := grpc.NewServer(grpcOptions...)
 	registerServices(grpcServer, xdsServer)
 	runGrpcServer(ctx, grpcServer, s.servePort)
+}
+
+// getLock will create, store and return a lock per node
+func (s *Snapshotter) getNodeLock(nodeID string) *sync.Mutex {
+	mu, _ := s.nodeLocks.LoadOrStore(nodeID, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+func (s *Snapshotter) deleteNodeLock(nodeID string) {
+	s.nodeLocks.Delete(nodeID)
 }
 
 // registerServices registers xds services served by our grpc server
