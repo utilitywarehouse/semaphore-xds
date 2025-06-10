@@ -509,6 +509,9 @@ func (s *Snapshotter) addOrUpdateNode(nodeID, address string, streamID int64) {
 // deleteNodeStream removes a stream from a node's resources and if the list of streams is
 // empty deletes the node
 func (s *Snapshotter) deleteNodeStream(nodeID string, streamID int64) {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	if nodeID == EmptyNodeID {
 		return
 	}
@@ -592,6 +595,9 @@ func (s *Snapshotter) getResourcesFromCache(typeURL string, resources []string) 
 // updateNodeStreamServiceResources updates the list of service resources requested in a node's stream context
 // by copying the most up to date version of them from the full snapshot (default snapshot)
 func (s *Snapshotter) updateNodeStreamServiceResources(nodeID, typeURL string, streamID int64, resources []string) error {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		return fmt.Errorf("Cannot update service snapshot resources, node: %s not found", nodeID)
@@ -633,6 +639,9 @@ func (s *Snapshotter) updateNodeStreamServiceResources(nodeID, typeURL string, s
 // updateNodeStreamEndpointsResources updates the list of endpoint resources requested in a node's stream context
 // by copying the most up to date version of them from the full snapshot (default snapshot)
 func (s *Snapshotter) updateNodeStreamEndpointsResources(nodeID, typeURL string, streamID int64, resources []string) error {
+	mu := s.getNodeLock(nodeID)
+	mu.Lock()
+	defer mu.Unlock()
 	n, ok := s.nodes.Load(nodeID)
 	if !ok {
 		return fmt.Errorf("Cannot update endpoint snapshot resources, node: %s not found", nodeID)
