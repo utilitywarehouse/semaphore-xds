@@ -8,4 +8,4 @@ resources:
 images:
   - name: semaphore-xds
     newName: quay.io/utilitywarehouse/semaphore-xds
-    newTag: master
+    newTag: v0.8.2
