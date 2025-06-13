@@ -58,9 +58,10 @@ type Snapshotter struct {
 	deltaRDSCache          *cache.LinearCache
 	deltaVHDSCache         *cache.LinearCache
 	muxCache               cache.MuxCache
-	requestRateLimit       *rate.Limiter    // maximum number of requests allowed to server
-	streamRequestPerSecond float64          // maximum number of requests per stream per second
-	streams                sync.Map         // map of open streams
+	requestRateLimit       *rate.Limiter     // maximum number of requests allowed to server
+	streamRequestPerSecond float64           // maximum number of requests per stream per second
+	streams                map[int64]*Stream // map of open streams
+	streamsMu              sync.RWMutex
 	nodes                  map[string]*Node // maps all clients node ids to requested resources that will be snapshotted and served
 	nodesMu                sync.RWMutex
 	snapNodesMu            sync.Mutex // Simple lock to avoid deleting a node while snapshotting
@@ -172,6 +173,7 @@ func NewSnapshotter(authority string, port uint, requestLimit, streamRequestLimi
 		deltaRDSCache:          deltaRDSCache,
 		deltaVHDSCache:         deltaVHDSCache,
 		muxCache:               muxCache,
+		streams:                make(map[int64]*Stream),
 		nodes:                  make(map[string]*Node),
 		requestRateLimit:       rate.NewLimiter(rate.Limit(requestLimit), 1),
 		streamRequestPerSecond: streamRequestLimit,
@@ -320,25 +322,34 @@ func (s *Snapshotter) OnStreamOpen(ctx context.Context, id int64, typ string) er
 		peerAddr = peerInfo.Addr.String()
 	}
 	log.Logger.Info("OnStreamOpen", "peer address", peerAddr, "id", id, "type", typ)
-	s.streams.Store(id, &Stream{
+	s.streamsMu.Lock()
+	defer s.streamsMu.Unlock()
+	s.streams[id] = &Stream{
 		peerAddress:      peerAddr,
 		requestRateLimit: rate.NewLimiter(rate.Limit(s.streamRequestPerSecond), 1),
-	})
+	}
 	metricOnStreamOpenInc()
 	return nil
 }
 
 func (s *Snapshotter) OnStreamClosed(id int64, node *core.Node) {
 	log.Logger.Info("OnStreamClosed", "id", id, "node", node)
-	s.streams.Delete(id)
+	s.streamsMu.Lock()
+	delete(s.streams, id)
+	s.streamsMu.Unlock()
 	s.deleteNodeStream(node.GetId(), id)
 	metricOnStreamClosedInc()
 }
 
 func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) error {
 	ctx := context.Background()
-	st, _ := s.streams.Load(id)
-	stream := st.(*Stream)
+	s.streamsMu.RLock()
+	defer s.streamsMu.RUnlock()
+	stream, ok := s.streams[id]
+	if !ok {
+		log.Logger.Warn("Received request on unknown stream", "id", id)
+		return fmt.Errorf("Unknown stream id: %d", id)
+	}
 	log.Logger.Info("OnStreamRequest",
 		"id", id,
 		"peer", stream.peerAddress,
@@ -366,7 +377,11 @@ func (s *Snapshotter) OnStreamRequest(id int64, r *discovery.DiscoveryRequest) e
 	}
 
 	s.addOrUpdateNode(r.GetNode().GetId(), stream.peerAddress, id)
-	if s.needToUpdateSnapshot(r.GetNode().GetId(), r.GetTypeUrl(), id, r.GetResourceNames()) {
+	needToUpdate, err := s.needToUpdateSnapshot(r.GetNode().GetId(), r.GetTypeUrl(), id, r.GetResourceNames())
+	if err != nil {
+		return err
+	}
+	if needToUpdate {
 		if err := s.updateStreamNodeResources(r.GetNode().GetId(), r.GetTypeUrl(), id, r.GetResourceNames()); err != nil {
 			return err
 		}
@@ -645,25 +660,25 @@ func (s *Snapshotter) updateStreamNodeResources(nodeID, typeURL string, streamID
 
 // needToUpdateSnapshot checks id a node snapshot needs updating based on the requested resources
 // from the client inside a streams context
-func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int64, resources []string) bool {
+func (s *Snapshotter) needToUpdateSnapshot(nodeID, typeURL string, streamID int64, resources []string) (bool, error) {
 	s.nodesMu.RLock()
 	defer s.nodesMu.RUnlock()
 	node, ok := s.nodes[nodeID]
 	if !ok {
-		return false
+		return false, nil
 	}
 	sNodeResources, ok := node.resources[streamID]
 	if !ok {
 		log.Logger.Warn("Cannot check if snapshot needs updating, stream not found", "id", streamID)
-		return false
+		return false, fmt.Errorf("Stream (id=%d) not found for node %s", streamID, nodeID)
 	}
 	if mapTypeURL(typeURL) == "services" {
-		return !resourcesMatch(sNodeResources.servicesNames[typeURL], resources)
+		return !resourcesMatch(sNodeResources.servicesNames[typeURL], resources), nil
 	}
 	if mapTypeURL(typeURL) == "endpoints" {
-		return !resourcesMatch(sNodeResources.endpointsNames[typeURL], resources)
+		return !resourcesMatch(sNodeResources.endpointsNames[typeURL], resources), nil
 	}
-	return false
+	return false, nil
 }
 
 // ListenAndServeFromCache will start an xDS server at the given port and serve
