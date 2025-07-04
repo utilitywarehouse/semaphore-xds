@@ -52,6 +52,10 @@ func makeXdstpClusterName(name, namespace, authority string, port int32) string 
 	return fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/%s", authority, makeClusterName(name, namespace, port))
 }
 
+func makeXdstpClusterLoadAssignmentName(name, namespace, authority string, port int32) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/%s", authority, makeClusterName(name, namespace, port))
+}
+
 // xdstp listener name based on:
 // https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/listener/v3/listener.proto#config-listener-v3-listener
 func makeXdstpListenerName(name, namespace, authority string, port int32) string {

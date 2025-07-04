@@ -196,9 +196,7 @@ func makeCluster(name, namespace, authority string, port int32, policy clusterv3
 
 	cluster := cluster(clusterName, policy)
 	if authority != "" {
-		// This will be the name of the subsequently requested ClusterLoadAssignment. We need to set this
-		// to the cluster name to hit resources in the cache and reply to EDS requests
-		cluster.EdsClusterConfig.ServiceName = clusterName
+		cluster.EdsClusterConfig.ServiceName = makeXdstpClusterLoadAssignmentName(name, namespace, authority, port)
 	}
 
 	switch policy {
