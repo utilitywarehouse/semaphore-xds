@@ -196,7 +196,7 @@ func createClustersFromEndpointStore(store XdsEndpointStore, authority string) E
 			for _, ce := range endpointSliceToClusterEndpoints(e.endpointSlice, e.priority) {
 				clusterName := makeClusterName(serviceEndpoint.service, serviceEndpoint.namespace, ce.port)
 				if authority != "" {
-					clusterName = makeXdstpClusterName(serviceEndpoint.service, serviceEndpoint.namespace, authority, ce.port)
+					clusterName = makeXdstpClusterLoadAssignmentName(serviceEndpoint.service, serviceEndpoint.namespace, authority, ce.port)
 				}
 				if c, ok := clusters[clusterName]; !ok {
 					clusters[clusterName] = EdsCluster{
