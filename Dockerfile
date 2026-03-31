@@ -1,13 +1,12 @@
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /go/src/github.com/utilitywarehouse/semaphore-xds
 COPY . /go/src/github.com/utilitywarehouse/semaphore-xds
 ENV CGO_ENABLED=0
 RUN \
-  apk --no-cache add git upx \
+  apk --no-cache add git \
     && go get -t ./... \
     && go test -v ./... \
     && go build -ldflags='-s -w' -o /semaphore-xds . \
-    && upx /semaphore-xds \
     && cd example/server/ \
     && go build -ldflags='-s -w' -o /semaphore-xds-echo-server . \
     && cd ../client/ \
