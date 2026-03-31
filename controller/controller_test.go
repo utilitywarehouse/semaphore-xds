@@ -9,11 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	kubeerror "k8s.io/apimachinery/pkg/api/errors"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	clientfeatures "k8s.io/client-go/features"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/utilitywarehouse/semaphore-xds/kube"
 	"github.com/utilitywarehouse/semaphore-xds/log"
 	"github.com/utilitywarehouse/semaphore-xds/pkg/apis/semaphorexds/v1alpha1"
-	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/utilitywarehouse/semaphore-xds/xds"
 )
@@ -32,6 +33,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	// Disable WatchListClient because the fake clientset used by
+	// ServiceWatcher's cache.NewInformer does not support streaming list
+	// semantics, causing WaitForCacheSync to block forever.
+	clientfeatures.FeatureGates().(interface{ Set(clientfeatures.Feature, bool) error }).Set(clientfeatures.WatchListClient, false)
 }
 
 func TestReconcileServices_LabelledService(t *testing.T) {
