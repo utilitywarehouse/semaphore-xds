@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-client-true
+  namespace: default
+  labels:
+    xds.semaphore.uw.systems/client: "true"
+spec:
+  initContainers:
+    - name: init-test
+      image: test
+  containers:
+    - name: my-app
+      image: my-app:latest
+    - name: my-app-2
+      image: my-app-2:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-exclude
+  namespace: default
+  labels:
+    xds.semaphore.uw.systems/client: "exclude"
+spec:
+  containers:
+    - name: my-app
+      image: my-app:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-envoy-sidecar
+  namespace: default
+  labels:
+    xds.semaphore.uw.systems/client: "envoy-sidecar"
+spec:
+  containers:
+    - name: my-app
+      image: my-app:latest
+    - name: my-app-2
+      image: my-app-2:latest

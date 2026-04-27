@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-client-true
+  namespace: default
+  labels:
+    xds.semaphore.uw.systems/client: "true"
+spec:
+  initContainers:
+    - name: init-test
+      image: test
+      env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: GRPC_XDS_BOOTSTRAP_CONFIG
+          value: >-
+            {
+              "xds_servers": [{
+                "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+                "channel_creds": [{"type": "insecure"}],
+                "server_features": ["xds_v3"]}
+              ],
+              "node":{
+                "id":"default/$(POD_NAME)",
+                "locality":{}
+              },
+              "authorities": {
+                "aws": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                },
+                "gcp": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                },
+                "merit": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                }
+              }
+            }
+  containers:
+    - name: my-app
+      image: my-app:latest
+      env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: GRPC_XDS_BOOTSTRAP_CONFIG
+          value: >-
+            {
+              "xds_servers": [{
+                "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+                "channel_creds": [{"type": "insecure"}],
+                "server_features": ["xds_v3"]}
+              ],
+              "node":{
+                "id":"default/$(POD_NAME)",
+                "locality":{}
+              },
+              "authorities": {
+                "aws": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                },
+                "gcp": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                },
+                "merit": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                }
+              }
+            }
+    - name: my-app-2
+      image: my-app-2:latest
+      env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: GRPC_XDS_BOOTSTRAP_CONFIG
+          value: >-
+            {
+              "xds_servers": [{
+                "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+                "channel_creds": [{"type": "insecure"}],
+                "server_features": ["xds_v3"]}
+              ],
+              "node":{
+                "id":"default/$(POD_NAME)",
+                "locality":{}
+              },
+              "authorities": {
+                "aws": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                },
+                "gcp": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                },
+                "merit": {
+                  "xds_servers": [{
+                    "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
+                    "channel_creds": [{"type": "insecure"}],
+                    "server_features": ["xds_v3"]}
+                  ]
+                }
+              }
+            }
