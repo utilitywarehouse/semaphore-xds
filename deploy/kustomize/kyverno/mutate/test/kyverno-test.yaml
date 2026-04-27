@@ -1,0 +1,32 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: xds-policies-test
+policies:
+  - ../mutate-semaphore-xds-clients-env.yaml
+  - ../mutate-semaphore-xds-envoy-sidecar.yaml
+resources:
+  - resources.yaml
+results:
+  # Standard client should get the global bootstrap config injected
+  - policy: mutate-semaphore-xds-bootstrap-config
+    resources: ["pod-client-true"]
+    kind: Pod
+    patchedResources: patched-pod-client-true.yaml
+    isMutatingPolicy: true
+    result: pass
+
+  # Pod labeled 'exclude' should be skipped
+  - policy: mutate-semaphore-xds-bootstrap-config
+    resources: ["pod-exclude"]
+    kind: Pod
+    isMutatingPolicy: true
+    result: skip
+
+  # Envoy sidecar client should get the sidecar initContainer and local bootstrap config
+  - policy: mutate-semaphore-xds-envoy-sidecar
+    resources: ["pod-envoy-sidecar"]
+    kind: Pod
+    patchedResources: patched-pod-envoy-sidecar.yaml
+    isMutatingPolicy: true
+    result: pass
