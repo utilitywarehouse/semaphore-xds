@@ -35,6 +35,9 @@ metadata:
   labels:
     xds.semaphore.uw.systems/client: "envoy-sidecar"
 spec:
+  initContainers:
+    - name: original-init
+      image: test
   containers:
     - name: my-app
       image: my-app:latest
