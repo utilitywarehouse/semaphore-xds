@@ -1,149 +1,103 @@
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1beta1
+kind: MutatingPolicy
 metadata:
   name: mutate-semaphore-xds-bootstrap-config
   annotations:
-    policies.kyverno.io/title: Mutate Sempaphore-xDS Bootstrap Config
+    policies.kyverno.io/title: Mutate Semaphore-xDS Bootstrap Config
     policies.kyverno.io/category: xDS
-    policies.kyverno.io/subject: Pod
-    policies.kyverno.io/description: >-
-      This policy ensures that pods labelled as clients of semaphore-xDS server
-      will have the needed xDS bootstrap configuration available as an
-      environment variable.
+    pod-policies.kyverno.io/autogen-controllers: none
 spec:
-  background: false
-  mutateExistingOnPolicyUpdate: false
-  rules:
-    - name: xds-clients-inject-env
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              operations:
-                - CREATE
-              selector:
-                matchLabels:
-                  xds.semaphore.uw.systems/client: "true"
-          - resources:
-              kinds:
-                - Pod
-              operations:
-                - CREATE
-              selector:
-                matchLabels:
-                  xds.semaphore.uw.systems/client: "native"
-          - resources:
-              kinds:
-                - Pod
-              operations:
-                - CREATE
-              namespaceSelector:
-                matchExpressions:
-                  - key: xds.semaphore.uw.systems/mutate
-                    operator: In
-                    values:
-                      - bootstrap-client-config
-      exclude:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              selector:
-                matchLabels:
-                  xds.semaphore.uw.systems/client: "exclude"
-          - resources:
-              kinds:
-                - Pod
-              selector:
-                matchLabels:
-                  xds.semaphore.uw.systems/client: "envoy-sidecar"
-      mutate:
-        patchStrategicMerge:
-          spec:
-            initContainers:
-              - (name): "*"
-                env:
-                  - name: POD_NAME
-                    valueFrom:
-                      fieldRef:
-                        fieldPath: metadata.name
-                  - name: GRPC_XDS_BOOTSTRAP_CONFIG
-                    value: >-
-                      {
-                        "xds_servers": [{
-                          "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
-                          "channel_creds": [{"type": "insecure"}],
-                          "server_features": ["xds_v3"]}
-                        ],
-                        "node":{
-                          "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
-                          "locality":{}
-                        },
-                        "authorities": {
-                          "aws": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "gcp": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "merit": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          }
-                        }
-                      }
-            containers:
-              - (name): "*"
-                env:
-                  - name: POD_NAME
-                    valueFrom:
-                      fieldRef:
-                        fieldPath: metadata.name
-                  - name: GRPC_XDS_BOOTSTRAP_CONFIG
-                    value: >-
-                      {
-                        "xds_servers": [{
-                          "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
-                          "channel_creds": [{"type": "insecure"}],
-                          "server_features": ["xds_v3"]}
-                        ],
-                        "node":{
-                          "id":"{{request.object.metadata.namespace}}/\$(POD_NAME)",
-                          "locality":{}
-                        },
-                        "authorities": {
-                          "aws": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "gcp": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          },
-                          "merit": {
-                            "xds_servers": [{
-                              "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
-                              "channel_creds": [{"type": "insecure"}],
-                              "server_features": ["xds_v3"]}
-                            ]
-                          }
-                        }
-                      }
+  autogen:
+    mutatingAdmissionPolicy:
+      enabled: false
+    podControllers:
+      controllers: [] # disable autogen for other resources
+
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+
+  matchConditions:
+    - name: match-xds-clients-inclusion
+      expression: >-
+        object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['true', 'native'] ||
+        namespaceObject.metadata.?labels['xds.semaphore.uw.systems/mutate'].orValue('') == 'bootstrap-client-config'
+
+    - name: match-xds-clients-exclusion
+      expression: >-
+        !(object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['exclude', 'envoy-sidecar'])
+
+  variables:
+    - name: pod_namespace
+      expression: "object.metadata.?namespace.orValue('')"
+
+    - name: injected_envs
+      expression: |
+        yaml.parse('''
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: GRPC_XDS_BOOTSTRAP_CONFIG
+            value: >-
+              {
+                "xds_servers": [{
+                  "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+                  "channel_creds": [{"type": "insecure"}],
+                  "server_features": ["xds_v3"]}
+                ],
+                "node":{
+                  "id":"''' + variables.pod_namespace + '''/$(POD_NAME)",
+                  "locality":{}
+                },
+                "authorities": {
+                  "aws": {
+                    "xds_servers": [{
+                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
+                      "channel_creds": [{"type": "insecure"}],
+                      "server_features": ["xds_v3"]}
+                    ]
+                  },
+                  "gcp": {
+                    "xds_servers": [{
+                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
+                      "channel_creds": [{"type": "insecure"}],
+                      "server_features": ["xds_v3"]}
+                    ]
+                  },
+                  "merit": {
+                    "xds_servers": [{
+                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
+                      "channel_creds": [{"type": "insecure"}],
+                      "server_features": ["xds_v3"]}
+                    ]
+                  }
+                }
+              }
+        ''')
+
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: |
+          (has(object.spec.initContainers) ?
+            object.spec.initContainers.map(c, object.spec.initContainers.indexOf(c)).map(idx,
+              JSONPatch{
+                op: "add",
+                path: "/spec/initContainers/" + string(idx) + "/env",
+                value: object.spec.initContainers[idx].?env.orValue([]) + variables.injected_envs
+              }
+            ) : []
+          ) +
+          (has(object.spec.containers) ?
+            object.spec.containers.map(c, object.spec.containers.indexOf(c)).map(idx,
+              JSONPatch{
+                op: "add",
+                path: "/spec/containers/" + string(idx) + "/env",
+                value: object.spec.containers[idx].?env.orValue([]) + variables.injected_envs
+              }
+            ) : []
+          )
