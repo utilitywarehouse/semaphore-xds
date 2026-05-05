@@ -176,5 +176,10 @@ spec:
       volumeMounts:
         - mountPath: /etc/envoy
           name: envoy-config
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+    - name: original-init
+      image: test
   volumes:
     - name: envoy-config
+    - projected:
+        defaultMode: 420
