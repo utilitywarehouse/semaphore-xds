@@ -14,26 +14,38 @@ spec:
         - assert:
             timeout: 30s
             resource:
-              apiVersion: kyverno.io/v1
-              kind: ClusterPolicy
+              apiVersion: policies.kyverno.io/v1
+              kind: MutatingPolicy
               metadata:
                 name: mutate-semaphore-xds-bootstrap-config
               status:
-                (conditions[?type == 'Ready']):
-                  - reason: Succeeded
-                    status: "True"
+                conditionStatus:
+                  (conditions[?type == 'RBACPermissionsGranted']):
+                    - message: Policy is ready for reporting.
+                      reason: Succeeded
+                      status: "True"
+                  (conditions[?type == 'WebhookConfigured']):
+                    - message: Webhook configured.
+                      reason: Succeeded
+                      status: "True"
 
         - assert:
             timeout: 30s
             resource:
-              apiVersion: kyverno.io/v1
-              kind: ClusterPolicy
+              apiVersion: policies.kyverno.io/v1
+              kind: MutatingPolicy
               metadata:
                 name: mutate-semaphore-xds-envoy-sidecar
               status:
-                (conditions[?type == 'Ready']):
-                  - reason: Succeeded
-                    status: "True"
+                conditionStatus:
+                  (conditions[?type == 'RBACPermissionsGranted']):
+                    - message: Policy is ready for reporting.
+                      reason: Succeeded
+                      status: "True"
+                  (conditions[?type == 'WebhookConfigured']):
+                    - message: Webhook configured.
+                      reason: Succeeded
+                      status: "True"
 
     - name: deploy-test-resources
       try:
