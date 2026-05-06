@@ -24,13 +24,17 @@ spec:
     - name: match-xds-clients-inclusion
       expression: >-
         object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['true', 'native'] ||
-        namespaceObject.metadata.?labels['xds.semaphore.uw.systems/mutate'].orValue('') == 'bootstrap-client-config'
+        variables.namespace_mutate_label == 'bootstrap-client-config'
 
     - name: match-xds-clients-exclusion
       expression: >-
         !(object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['exclude', 'envoy-sidecar'])
 
   variables:
+    # namespaceObject.metadata.?labels[''] doesn't work in matchConditions directly for mutatingPolicy
+    - name: namespace_mutate_label
+      expression: namespaceObject.metadata.?labels['xds.semaphore.uw.systems/mutate'].orValue('')
+
     - name: pod_namespace
       expression: "object.metadata.?namespace.orValue('')"
 
