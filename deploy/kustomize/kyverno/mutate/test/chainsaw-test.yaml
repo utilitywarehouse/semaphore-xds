@@ -4,6 +4,17 @@ metadata:
   name: test-semaphore-xds-policies
 spec:
   steps:
+    - name: setup-prerequisites
+      try:
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: ns-with-mutate-label
+                labels:
+                  xds.semaphore.uw.systems/mutate: bootstrap-client-config
+
     - name: apply-policies-and-exceptions
       try:
         - apply:

@@ -43,3 +43,13 @@ spec:
       image: my-app:latest
     - name: my-app-2
       image: my-app-2:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-ns-client
+  namespace: ns-with-mutate-label
+spec:
+  containers:
+    - name: my-app
+      image: my-app:latest
