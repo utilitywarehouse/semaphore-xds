@@ -1,6 +1,6 @@
 module github.com/utilitywarehouse/semaphore-xds
 
-go 1.26.0
+go 1.26.5
 
 require (
 	github.com/envoyproxy/go-control-plane v0.14.0
