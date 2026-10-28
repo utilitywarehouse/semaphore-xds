@@ -45,15 +45,33 @@ spec:
               metadata:
                 name: mutate-semaphore-xds-bootstrap-config
               status:
+                generated: true
                 conditionStatus:
                   (conditions[?type == 'RBACPermissionsGranted']):
                     - message: Policy is ready for reporting.
                       reason: Succeeded
                       status: "True"
-                  (conditions[?type == 'WebhookConfigured']):
-                    - message: Webhook configured.
-                      reason: Succeeded
-                      status: "True"
+
+        - assert:
+            timeout: 120s
+            resource:
+              apiVersion: admissionregistration.k8s.io/v1
+              kind: MutatingAdmissionPolicy
+              metadata:
+                name: mpol-mutate-semaphore-xds-bootstrap-config
+              spec:
+                reinvocationPolicy: Never
+                (mutations[0].patchType): JSONPatch
+
+        - assert:
+            timeout: 120s
+            resource:
+              apiVersion: admissionregistration.k8s.io/v1
+              kind: MutatingAdmissionPolicyBinding
+              metadata:
+                name: mpol-mutate-semaphore-xds-bootstrap-config-binding
+              spec:
+                policyName: mpol-mutate-semaphore-xds-bootstrap-config
 
         - assert:
             timeout: 120s
@@ -63,19 +81,49 @@ spec:
               metadata:
                 name: mutate-semaphore-xds-envoy-sidecar
               status:
+                generated: true
                 conditionStatus:
                   (conditions[?type == 'RBACPermissionsGranted']):
                     - message: Policy is ready for reporting.
                       reason: Succeeded
                       status: "True"
-                  (conditions[?type == 'WebhookConfigured']):
-                    - message: Webhook configured.
-                      reason: Succeeded
-                      status: "True"
 
-    # Kyverno reloads policies asynchronously, so wait until a throwaway pod is
-    # actually mutated before creating the fixtures.
-    - name: wait-for-policies
+        - assert:
+            timeout: 120s
+            resource:
+              apiVersion: admissionregistration.k8s.io/v1
+              kind: MutatingAdmissionPolicy
+              metadata:
+                name: mpol-mutate-semaphore-xds-envoy-sidecar
+              spec:
+                reinvocationPolicy: Never
+                (mutations[0].patchType): ApplyConfiguration
+                (mutations[1].patchType): JSONPatch
+
+        - assert:
+            timeout: 120s
+            resource:
+              apiVersion: admissionregistration.k8s.io/v1
+              kind: MutatingAdmissionPolicyBinding
+              metadata:
+                name: mpol-mutate-semaphore-xds-envoy-sidecar-binding
+              spec:
+                policyName: mpol-mutate-semaphore-xds-envoy-sidecar
+
+        # A policy backed by a MutatingAdmissionPolicy must not also run as a webhook.
+        - assert:
+            timeout: 120s
+            resource:
+              apiVersion: admissionregistration.k8s.io/v1
+              kind: MutatingWebhookConfiguration
+              metadata:
+                name: kyverno-resource-mutating-webhook-cfg
+              (length((webhooks || `[]`)[?contains(name, 'mutate-semaphore-xds-bootstrap-config')])): 0
+              (length((webhooks || `[]`)[?contains(name, 'mutate-semaphore-xds-envoy-sidecar')])): 0
+
+    # The API server applies a generated policy asynchronously, so wait until a
+    # throwaway pod is actually mutated before creating the fixtures.
+    - name: wait-for-generated-policy
       try:
         - script:
             timeout: 120s
@@ -83,9 +131,9 @@ spec:
               set -eu
 
               # A pod is only mutated when it is created, so a pod created
-              # before Kyverno loaded the policy stays unmutated forever.
-              # Create a fresh canary per policy on every attempt and wait
-              # until both policies are live.
+              # before the API server loaded the generated policy stays
+              # unmutated forever. Create a fresh canary per policy on every
+              # attempt and wait until both policies are live.
               mutated_bootstrap=""
               mutated_envoy=""
               i=0
@@ -105,7 +153,7 @@ spec:
               done
 
               if [ -z "$mutated_bootstrap" ] || [ -z "$mutated_envoy" ]; then
-                echo "a policy did not mutate a canary pod (bootstrap='$mutated_bootstrap' envoy='$mutated_envoy')" >&2
+                echo "a generated policy did not mutate a canary pod (bootstrap='$mutated_bootstrap' envoy='$mutated_envoy')" >&2
                 exit 1
               fi
 
