@@ -20,84 +20,100 @@ spec:
         operations: ["CREATE"]
         resources: ["pods"]
 
+  # The inclusion check is a variable rather than a match condition: a native
+  # MutatingAdmissionPolicy does not populate namespaceObject when evaluating
+  # match conditions, but it does populate it for variables.
   matchConditions:
-    - name: match-xds-clients-inclusion
-      expression: >-
-        object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['true', 'native'] ||
-        namespaceObject.metadata.?labels['xds.semaphore.uw.systems/mutate'].orValue('') == 'bootstrap-client-config'
-
     - name: match-xds-clients-exclusion
       expression: >-
         !(object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['exclude', 'envoy-sidecar'])
 
   variables:
     - name: pod_namespace
-      expression: "object.metadata.?namespace.orValue('')"
+      expression: "request.namespace"
 
+    - name: is_xds_client
+      expression: >-
+        object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['true', 'native'] ||
+        namespaceObject.metadata.?labels['xds.semaphore.uw.systems/mutate'].orValue('') == 'bootstrap-client-config'
+
+    - name: init_containers
+      expression: "object.spec.?initContainers.orValue([])"
+
+    - name: containers
+      expression: "object.spec.?containers.orValue([])"
+
+    # A pod created by a controller is named by the API server after mutating
+    # admission has run, so metadata.name is empty here. The node id is
+    # completed by the kubelet, which expands $(POD_NAME) from the env var.
+    - name: bootstrap_config
+      expression: |
+        '''{
+          "xds_servers": [{
+            "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
+            "channel_creds": [{"type": "insecure"}],
+            "server_features": ["xds_v3"]}
+          ],
+          "node":{
+            "id":"''' + variables.pod_namespace + '''/$(POD_NAME)",
+            "locality":{}
+          },
+          "authorities": {
+            "aws": {
+              "xds_servers": [{
+                "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
+                "channel_creds": [{"type": "insecure"}],
+                "server_features": ["xds_v3"]}
+              ]
+            },
+            "gcp": {
+              "xds_servers": [{
+                "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
+                "channel_creds": [{"type": "insecure"}],
+                "server_features": ["xds_v3"]}
+              ]
+            },
+            "merit": {
+              "xds_servers": [{
+                "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
+                "channel_creds": [{"type": "insecure"}],
+                "server_features": ["xds_v3"]}
+              ]
+            }
+          }
+        }'''
+
+    # POD_NAME is not read by applications, it only gives the kubelet a value
+    # to expand in bootstrap_config. The values are wrapped in dyn() because a
+    # CEL map literal has a single value type and an env entry needs both a
+    # string (`value`) and an object (`valueFrom`).
     - name: injected_envs
       expression: |
-        yaml.parse('''
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: GRPC_XDS_BOOTSTRAP_CONFIG
-            value: >-
-              {
-                "xds_servers": [{
-                  "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
-                  "channel_creds": [{"type": "insecure"}],
-                  "server_features": ["xds_v3"]}
-                ],
-                "node":{
-                  "id":"''' + variables.pod_namespace + '''/$(POD_NAME)",
-                  "locality":{}
-                },
-                "authorities": {
-                  "aws": {
-                    "xds_servers": [{
-                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.aws:18000",
-                      "channel_creds": [{"type": "insecure"}],
-                      "server_features": ["xds_v3"]}
-                    ]
-                  },
-                  "gcp": {
-                    "xds_servers": [{
-                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.gcp:18000",
-                      "channel_creds": [{"type": "insecure"}],
-                      "server_features": ["xds_v3"]}
-                    ]
-                  },
-                  "merit": {
-                    "xds_servers": [{
-                      "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.merit:18000",
-                      "channel_creds": [{"type": "insecure"}],
-                      "server_features": ["xds_v3"]}
-                    ]
-                  }
-                }
-              }
-        ''')
+        [
+          {"name": dyn("POD_NAME"), "valueFrom": dyn({"fieldRef": {"fieldPath": "metadata.name"}})},
+          {"name": dyn("GRPC_XDS_BOOTSTRAP_CONFIG"), "value": dyn(variables.bootstrap_config)}
+        ]
 
   mutations:
     - patchType: JSONPatch
       jsonPatch:
+        # The patches are filtered instead of guarded by a ternary so the
+        # expression keeps the list(JSONPatch) type a native
+        # MutatingAdmissionPolicy requires.
         expression: |
-          (has(object.spec.initContainers) ?
-            object.spec.initContainers.map(c, object.spec.initContainers.indexOf(c)).map(idx,
+          (
+            variables.init_containers.map(c, variables.init_containers.indexOf(c)).map(idx,
               JSONPatch{
                 op: "add",
                 path: "/spec/initContainers/" + string(idx) + "/env",
-                value: object.spec.initContainers[idx].?env.orValue([]) + variables.injected_envs
+                value: variables.init_containers[idx].?env.orValue([]) + variables.injected_envs
               }
-            ) : []
-          ) +
-          (has(object.spec.containers) ?
-            object.spec.containers.map(c, object.spec.containers.indexOf(c)).map(idx,
+            ) +
+            variables.containers.map(c, variables.containers.indexOf(c)).map(idx,
               JSONPatch{
                 op: "add",
                 path: "/spec/containers/" + string(idx) + "/env",
-                value: object.spec.containers[idx].?env.orValue([]) + variables.injected_envs
+                value: variables.containers[idx].?env.orValue([]) + variables.injected_envs
               }
-            ) : []
-          )
+            )
+          ).filter(p, variables.is_xds_client)

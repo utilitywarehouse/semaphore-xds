@@ -15,6 +15,21 @@ spec:
                 labels:
                   xds.semaphore.uw.systems/mutate: bootstrap-client-config
 
+        # A cluster kept by REUSE_CLUSTER still holds the pods from the previous
+        # run, and applying over an existing Pod is rejected by the API server
+        # (only image and a few other fields may change). Start clean so the
+        # suite can run twice against the same cluster.
+        - script:
+            # Deleting the deployment waits for its pod's grace period, which
+            # can take longer than the default script timeout.
+            timeout: 120s
+            content: |
+              set -eu
+              kubectl -n default delete deployment deployment-client-true --ignore-not-found --timeout=60s
+              kubectl -n default delete pods -l xds.semaphore.uw.systems/client --ignore-not-found --timeout=60s
+              # pod-ns-client is matched by the namespace label, not a pod label.
+              kubectl -n ns-with-mutate-label delete pods --all --ignore-not-found --timeout=60s
+
     - name: apply-policies-and-exceptions
       try:
         - apply:
@@ -23,7 +38,7 @@ spec:
             file: ../mutate-semaphore-xds-envoy-sidecar.yaml
 
         - assert:
-            timeout: 30s
+            timeout: 120s
             resource:
               apiVersion: policies.kyverno.io/v1
               kind: MutatingPolicy
@@ -41,7 +56,7 @@ spec:
                       status: "True"
 
         - assert:
-            timeout: 30s
+            timeout: 120s
             resource:
               apiVersion: policies.kyverno.io/v1
               kind: MutatingPolicy
@@ -57,6 +72,42 @@ spec:
                     - message: Webhook configured.
                       reason: Succeeded
                       status: "True"
+
+    # Kyverno reloads policies asynchronously, so wait until a throwaway pod is
+    # actually mutated before creating the fixtures.
+    - name: wait-for-policies
+      try:
+        - script:
+            timeout: 120s
+            content: |
+              set -eu
+
+              # A pod is only mutated when it is created, so a pod created
+              # before Kyverno loaded the policy stays unmutated forever.
+              # Create a fresh canary per policy on every attempt and wait
+              # until both policies are live.
+              mutated_bootstrap=""
+              mutated_envoy=""
+              i=0
+              while [ "$i" -lt 30 ]; do
+                bootstrap="policy-canary-$i"
+                envoy="envoy-canary-$i"
+                kubectl -n default run "$bootstrap" --image=busybox --restart=Never --labels xds.semaphore.uw.systems/client=true >/dev/null 2>&1 || true
+                kubectl -n default run "$envoy" --image=busybox --restart=Never --labels xds.semaphore.uw.systems/client=envoy-sidecar >/dev/null 2>&1 || true
+                mutated_bootstrap=$(kubectl -n default get pod "$bootstrap" -o jsonpath='{.spec.containers[0].env[?(@.name=="POD_NAME")].name}' 2>/dev/null || true)
+                mutated_envoy=$(kubectl -n default get pod "$envoy" -o jsonpath='{.spec.initContainers[?(@.name=="envoy-sidecar")].name}' 2>/dev/null || true)
+                kubectl -n default delete pod "$bootstrap" "$envoy" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+                if [ -n "$mutated_bootstrap" ] && [ -n "$mutated_envoy" ]; then
+                  break
+                fi
+                sleep 1
+                i=$((i + 1))
+              done
+
+              if [ -z "$mutated_bootstrap" ] || [ -z "$mutated_envoy" ]; then
+                echo "a policy did not mutate a canary pod (bootstrap='$mutated_bootstrap' envoy='$mutated_envoy')" >&2
+                exit 1
+              fi
 
     - name: deploy-test-resources
       try:
@@ -84,6 +135,40 @@ spec:
                   - name: my-app
                     image: my-app:latest
                     (env == null): true
+
+    - name: assert-generated-name-pod
+      try:
+        - script:
+            timeout: 120s
+            content: |
+              set -eu
+
+              # The deployment creates its pod asynchronously; wait for it to
+              # be running before reading the container environment.
+              pod=""
+              i=0
+              while [ "$i" -lt 30 ]; do
+                pod=$(kubectl get pods -n default -l app=deployment-client-true -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                if [ -n "$pod" ]; then
+                  kubectl wait -n default --for=condition=Ready "pod/$pod" --timeout=10s >/dev/null 2>&1 && break
+                fi
+                sleep 1
+                i=$((i + 1))
+              done
+              if [ -z "$pod" ]; then
+                echo "the deployment pod did not become ready" >&2
+                exit 1
+              fi
+
+              # The container is running, so the kubelet has expanded
+              # $(POD_NAME) in the injected config. Read the value the
+              # application would actually get.
+              value=$(kubectl exec -n default "$pod" -- printenv GRPC_XDS_BOOTSTRAP_CONFIG)
+
+              if ! printf '%s' "$value" | grep -Fq "\"id\":\"default/$pod\""; then
+                echo "node id is not default/$pod: $value" >&2
+                exit 1
+              fi
 
     - name: mutate-semaphore-xds-envoy-sidecar
       try:
