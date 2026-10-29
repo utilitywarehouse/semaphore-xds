@@ -27,6 +27,26 @@ spec:
     - name: my-app
       image: my-app:latest
 ---
+# Already carries the injected env, so the policy leaves the pod alone.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-already-injected
+  namespace: default
+  labels:
+    xds.semaphore.uw.systems/client: "true"
+spec:
+  containers:
+    - name: my-app
+      image: my-app:latest
+      env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: GRPC_XDS_BOOTSTRAP_CONFIG
+          value: '{"node":{"id":"custom"}}'
+---
 apiVersion: v1
 kind: Pod
 metadata:
