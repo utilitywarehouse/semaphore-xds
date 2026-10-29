@@ -10,7 +10,7 @@ metadata:
 spec:
   autogen:
     mutatingAdmissionPolicy:
-      enabled: true
+      enabled: false
     podControllers:
       controllers: [] # disable autogen for other resources
 
