@@ -13,9 +13,10 @@ spec:
         - name: POD_NAME
           valueFrom:
             fieldRef:
+              apiVersion: v1
               fieldPath: metadata.name
         - name: GRPC_XDS_BOOTSTRAP_CONFIG
-          value: >-
+          value: |-
             {
               "xds_servers": [{
                 "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
@@ -57,9 +58,10 @@ spec:
         - name: POD_NAME
           valueFrom:
             fieldRef:
+              apiVersion: v1
               fieldPath: metadata.name
         - name: GRPC_XDS_BOOTSTRAP_CONFIG
-          value: >-
+          value: |-
             {
               "xds_servers": [{
                 "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
@@ -100,9 +102,10 @@ spec:
         - name: POD_NAME
           valueFrom:
             fieldRef:
+              apiVersion: v1
               fieldPath: metadata.name
         - name: GRPC_XDS_BOOTSTRAP_CONFIG
-          value: >-
+          value: |-
             {
               "xds_servers": [{
                 "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",
@@ -151,9 +154,10 @@ spec:
         - name: POD_NAME
           valueFrom:
             fieldRef:
+              apiVersion: v1
               fieldPath: metadata.name
         - name: GRPC_XDS_BOOTSTRAP_CONFIG
-          value: >-
+          value: |-
             {
               "xds_servers": [{
                 "server_uri": "semaphore-xds.sys-semaphore.svc.cluster.local:18000",

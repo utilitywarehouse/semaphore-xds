@@ -53,3 +53,26 @@ spec:
   containers:
     - name: my-app
       image: my-app:latest
+---
+# The API server names these pods after mutating admission has run, so the
+# node id is only complete once the kubelet expands $(POD_NAME).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-client-true
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment-client-true
+  template:
+    metadata:
+      labels:
+        app: deployment-client-true
+        xds.semaphore.uw.systems/client: "true"
+    spec:
+      containers:
+        - name: my-app
+          image: alpine:3.22
+          command: ["sleep", "infinity"]
