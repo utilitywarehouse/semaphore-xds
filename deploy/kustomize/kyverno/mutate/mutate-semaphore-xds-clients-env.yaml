@@ -28,6 +28,13 @@ spec:
       expression: >-
         !(object.metadata.?labels['xds.semaphore.uw.systems/client'].orValue('') in ['exclude', 'envoy-sidecar'])
 
+    # The patch writes the env of every container at once, so a pod is already
+    # injected when all of its containers carry the config. Skipping those keeps
+    # a reinvocation from rewriting identical entries.
+    - name: match-no-bootstrap-config
+      expression: >-
+        !object.spec.?containers.orValue([]).all(c, c.?env.orValue([]).exists(e, e.?name.orValue('') == 'GRPC_XDS_BOOTSTRAP_CONFIG'))
+
   variables:
     - name: pod_namespace
       expression: "request.namespace"

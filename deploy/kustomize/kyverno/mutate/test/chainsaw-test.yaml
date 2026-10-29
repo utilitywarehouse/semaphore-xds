@@ -126,6 +126,21 @@ spec:
               apiVersion: v1
               kind: Pod
               metadata:
+                name: pod-already-injected
+                namespace: default
+              spec:
+                containers:
+                  - name: my-app
+                    (length(env)): 2
+                    (env[0].name): POD_NAME
+                    (env[1].value): '{"node":{"id":"custom"}}'
+
+        - assert:
+            timeout: 30s
+            resource:
+              apiVersion: v1
+              kind: Pod
+              metadata:
                 name: pod-exclude
                 namespace: default
                 labels:
