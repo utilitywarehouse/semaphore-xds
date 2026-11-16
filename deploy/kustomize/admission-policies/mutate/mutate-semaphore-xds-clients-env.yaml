@@ -1,18 +1,12 @@
-apiVersion: policies.kyverno.io/v1
-kind: MutatingPolicy
+# Mutate Semaphore-xDS Bootstrap Config
+
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
 metadata:
   name: mutate-semaphore-xds-bootstrap-config
-  annotations:
-    policies.kyverno.io/title: Mutate Semaphore-xDS Bootstrap Config
-    policies.kyverno.io/category: xDS
-    pod-policies.kyverno.io/autogen-controllers: none
 spec:
-  autogen:
-    mutatingAdmissionPolicy:
-      enabled: true
-    podControllers:
-      controllers: [] # disable autogen for other resources
-
+  failurePolicy: Fail
+  reinvocationPolicy: Never
   matchConstraints:
     resourceRules:
       - apiGroups: [""]
@@ -124,3 +118,10 @@ spec:
               }
             )
           ).filter(p, variables.is_xds_client)
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: mutate-semaphore-xds-bootstrap-config-binding
+spec:
+  policyName: mutate-semaphore-xds-bootstrap-config

@@ -143,16 +143,17 @@ variable.
 Then you need to import the following module in the client code:
 `_ "google.golang.org/grpc/xds"` and call the call xds server addresses.
 
-### Mutate Bootstrap Config - Kyverno
+### Mutate Bootstrap Config
 
 The client above configuration should be identical for all clients living in the
 same cluster, assuming only one xDS server is deployed. In such case, it is
 handy to use a mutation hook to inject the needed environment variable to your
-client pods. A Kustomize base to achieve that using Kyverno is provided [here](
-./deploy/kustomize/kyverno/mutate/). This is assuming semaphore-xds is deployed
-under a namespace called `sys-semaphore` so patch if needed. Your pods will need
-to be labeled with `xds.semaphore.uw.systems/client: "true"` in order to be
-selected by the mutating rule.
+client pods. A Kustomize base with `MutatingAdmissionPolicies` is provided
+[here](./deploy/kustomize/admission-policies/mutate/). This is assuming
+semaphore-xds is deployed under a namespace called `sys-semaphore` so patch if
+needed. Your pods will need to be labeled with
+`xds.semaphore.uw.systems/client: "true"` in order to be selected by the
+mutation.
 
 # Metrics
 
