@@ -9,9 +9,9 @@ SKIP_DELETE ?= false
 REUSE_CLUSTER ?= false
 TEST_DIR ?= .
 
-# Point to a local folder (e.g., kyverno/e2e-deploy), a URL, or leave blank to skip
-INSTALL_MANIFESTS ?= https://github.com/kyverno/kyverno/raw/main/config/install-latest-testing.yaml
-INSTALL_NAMESPACE ?= kyverno
+# The policies are plain MutatingAdmissionPolicies, so there is nothing to
+# install before the tests. Point to a local folder or URL to add a dependency.
+INSTALL_MANIFESTS ?=
 # Leave blank to use the image's baked-in default
 CHAINSAW_CONFIG ?=
 
@@ -28,19 +28,19 @@ help:
 	@echo "  kubectl       Run kubectl commands against the persistent test cluster"
 	@echo ""
 	@echo "Variables for Local Dev:"
-	@echo "  TEST_DIR      Target directory (e.g., TEST_DIR=kyverno/policies/pods)."
+	@echo "  TEST_DIR      Target directory (e.g., TEST_DIR=deploy/kustomize/admission-policies/mutate/test)."
 	@echo "  REUSE_CLUSTER Set to 'true' to skip cluster teardown."
 	@echo "  SKIP_DELETE   Set to 'true' to leave resources in the cluster for debugging."
 	@echo ""
 	@echo "Debugging (When REUSE_CLUSTER=true):"
 	@echo "  To run kubectl commands against the persistent test cluster from your host:"
-	@echo "  make kubectl CMD=\"get pods -n kyverno\""
+	@echo "  make kubectl CMD=\"get mutatingadmissionpolicies\""
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test-all"
-	@echo "  make test-target TEST_DIR=kyverno/policies/pods"
-	@echo "  make test-target TEST_DIR=kyverno/policies/pods REUSE_CLUSTER=true"
-	@echo "  make kubectl CMD=\"get pods -n kyverno\""
+	@echo "  make test-target TEST_DIR=deploy/kustomize/admission-policies/mutate/test"
+	@echo "  make test-target TEST_DIR=deploy/kustomize/admission-policies/mutate/test REUSE_CLUSTER=true"
+	@echo "  make kubectl CMD=\"get mutatingadmissionpolicies\""
 
 .PHONY: setup-network
 setup-network:
@@ -59,7 +59,6 @@ test-all: setup-network
 		-e REUSE_CLUSTER=$(REUSE_CLUSTER) \
 		-e SKIP_DELETE=$(SKIP_DELETE) \
 		-e INSTALL_MANIFESTS="$(INSTALL_MANIFESTS)" \
-		-e INSTALL_NAMESPACE="$(INSTALL_NAMESPACE)" \
 		-e CHAINSAW_CONFIG="$(CHAINSAW_CONFIG)" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(REPO_DIR):/repo \
@@ -78,7 +77,6 @@ test-target: setup-network
 		-e REUSE_CLUSTER=$(REUSE_CLUSTER) \
 		-e SKIP_DELETE=$(SKIP_DELETE) \
 		-e INSTALL_MANIFESTS="$(INSTALL_MANIFESTS)" \
-		-e INSTALL_NAMESPACE="$(INSTALL_NAMESPACE)" \
 		-e CHAINSAW_CONFIG="$(CHAINSAW_CONFIG)" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(REPO_DIR):/repo \

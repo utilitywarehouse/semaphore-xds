@@ -1,19 +1,12 @@
-apiVersion: policies.kyverno.io/v1
-kind: MutatingPolicy
+# Mutate Semaphore-xDS Envoy Sidecar
+
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
 metadata:
   name: mutate-semaphore-xds-envoy-sidecar
-  annotations:
-    policies.kyverno.io/title: Mutate Sempaphore-xDS Envoy Sidecar
-    policies.kyverno.io/category: xDS
-    policies.kyverno.io/description: 'This policy ensures that pods labelled with xds.semaphore.uw.systems/envoy-sidecar: "true" are injected with an envoy sidecar to proxy grpc connections. It also points the rest of the containers to semaphore-xds-localhost sys-semaphore service to get mock xDS config that will point to a local port for envoy sidecar via gRPC bootstrap conifg.'
-    pod-policies.kyverno.io/autogen-controllers: none
 spec:
-  autogen:
-    mutatingAdmissionPolicy:
-      enabled: true
-    podControllers:
-      controllers: [] # disable autogen for other resources
-
+  failurePolicy: Fail
+  reinvocationPolicy: Never
   matchConstraints:
     resourceRules:
       - apiGroups: [""]
@@ -226,3 +219,10 @@ spec:
               value: object.spec.containers[idx].?env.orValue([]) + variables.injected_envs
             }
           )
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: mutate-semaphore-xds-envoy-sidecar-binding
+spec:
+  policyName: mutate-semaphore-xds-envoy-sidecar
